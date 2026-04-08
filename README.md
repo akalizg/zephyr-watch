@@ -85,7 +85,7 @@ LOCATION '/zephyr/features/';
 ## 🐍 六、 下一步：Python 机器学习实战
 
 ### 1. 编写位置
-为了保持项目整洁，请在项目根目录下创建一个新的目录 `python_ml`。
+为了保持项目整洁，请在项目根目录下创建一个新的目录 `zephyr_ml`。
 ```
 Zephyr-Watch
 ├── src/main/java (Java代码)
