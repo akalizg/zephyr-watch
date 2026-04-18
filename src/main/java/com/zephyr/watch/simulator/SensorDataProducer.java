@@ -1,7 +1,9 @@
 package com.zephyr.watch.simulator;
 
-import com.alibaba.fastjson2.JSON;
-import com.zephyr.watch.bean.SensorReading;
+import com.zephyr.watch.config.JobConfig;
+import com.zephyr.watch.config.KafkaConfig;
+import com.zephyr.watch.model.SensorReading;
+import com.zephyr.watch.util.JsonUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -12,59 +14,54 @@ import java.io.FileReader;
 import java.util.Properties;
 
 /**
- * Zephyr-Watch 数据流模拟器
- * 读取本地数据集并发送到 Kafka
+ * 读取 NASA 数据集并发送到 Kafka
  */
 public class SensorDataProducer {
+
     public static void main(String[] args) throws Exception {
-        // 1. Kafka 生产者配置
         Properties props = new Properties();
-        // TODO: 如果你没配 hosts，请把 node1 换成虚拟机的实际 IP，例如 "192.168.1.100:9092"
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "192.168.88.161:9092");
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaConfig.BOOTSTRAP_SERVERS);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
-        KafkaProducer<String, String> producer = new KafkaProducer<>(props);
+        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(props);
 
-        // 2. 数据集文件路径 (指向你刚才建好的 data 文件夹)
-        String filePath = "data/train_FD001.txt";
-
-        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+        try (BufferedReader br = new BufferedReader(new FileReader(JobConfig.DATA_FILE_PATH))) {
             String line;
-            System.out.println("🚀 Zephyr-Watch 模拟器启动，开始向 Kafka 发送工业数据...");
+            System.out.println("Zephyr-Watch 模拟器启动，开始向 Kafka 发送工业数据...");
 
             while ((line = br.readLine()) != null) {
-                // NASA数据是以空格分隔的，使用正则切分
-                String[] parts = line.trim().split("\\s+");
-                if (parts.length < 10) continue;
+                try {
+                    String[] parts = line.trim().split("\\s+");
+                    if (parts.length < 9) {
+                        continue;
+                    }
 
-                // 3. 提取数据并封装为 Bean
-                SensorReading reading = new SensorReading();
-                reading.setMachineId(Integer.parseInt(parts[0]));
-                reading.setCycle(Integer.parseInt(parts[1]));
-                // 注意数组索引：第7列数据的索引是6
-                reading.setS2(Double.parseDouble(parts[6]));
-                reading.setS3(Double.parseDouble(parts[7]));
-                reading.setS4(Double.parseDouble(parts[8]));
-                reading.setTs(System.currentTimeMillis());
+                    SensorReading reading = new SensorReading();
+                    reading.setMachineId(Integer.parseInt(parts[0]));
+                    reading.setCycle(Integer.parseInt(parts[1]));
+                    reading.setPressure(Double.parseDouble(parts[6]));
+                    reading.setTemperature(Double.parseDouble(parts[7]));
+                    reading.setSpeed(Double.parseDouble(parts[8]));
+                    reading.setEventTime(System.currentTimeMillis());
 
-                // 4. 使用 fastjson2 转为 JSON 字符串
-                String jsonString = JSON.toJSONString(reading);
+                    String jsonString = JsonUtils.toJsonString(reading);
+                    ProducerRecord<String, String> record =
+                            new ProducerRecord<String, String>(KafkaConfig.INPUT_TOPIC, jsonString);
 
-                // 5. 发送到 Kafka 的 iot_sensor_data 主题
-                ProducerRecord<String, String> record = new ProducerRecord<>("iot_sensor_data", jsonString);
-                producer.send(record);
+                    producer.send(record);
+                    System.out.println("已发送: " + jsonString);
 
-                System.out.println("📡 已发送: " + jsonString);
-
-                // 6. 模拟工业高频采样：每 500 毫秒发送一条
-                Thread.sleep(500);
+                    Thread.sleep(JobConfig.PRODUCER_SLEEP_MS);
+                } catch (Exception lineEx) {
+                    System.err.println("单行数据解析失败，已跳过。原始行: " + line);
+                }
             }
         } catch (Exception e) {
-            System.err.println("❌ 发送失败，请检查文件路径或 Kafka 连接！报错信息：" + e.getMessage());
+            System.err.println("发送失败，请检查文件路径或 Kafka 连接。报错信息：" + e.getMessage());
         } finally {
             producer.close();
-            System.out.println("🛑 数据发送结束。");
+            System.out.println("数据发送结束。");
         }
     }
 }
