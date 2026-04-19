@@ -4,6 +4,7 @@ import com.zephyr.watch.config.StorageConfig;
 import org.apache.flink.api.common.serialization.SimpleStringEncoder;
 import org.apache.flink.connector.file.sink.FileSink;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.BasePathBucketAssigner;
 import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 
 import java.time.Duration;
@@ -27,6 +28,7 @@ public final class HdfsCsvSinkFactory {
                         new Path(path),
                         new SimpleStringEncoder<String>(StorageConfig.OUTPUT_CHARSET)
                 )
+                .withBucketAssigner(new BasePathBucketAssigner<String>())
                 .withRollingPolicy(
                         DefaultRollingPolicy.builder()
                                 .withRolloverInterval(Duration.ofMinutes(1))

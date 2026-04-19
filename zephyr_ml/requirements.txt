@@ -1,4 +1,4 @@
 pandas==2.2.3
-numpy==1.26.4
-scikit-learn==1.5.2
-joblib==1.4.2
+PyHive==0.7.0
+thrift==0.16.0
+thrift-sasl==0.4.3
