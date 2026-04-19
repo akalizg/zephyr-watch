@@ -1,13 +1,7 @@
-# 排除 Maven 编译生成的目录
-target/
-
-# 排除 IntelliJ IDEA 的配置目录
 .idea/
 *.iml
-
-# 排除操作系统产生的临时文件
+target/
+logs/
+*.log
 .DS_Store
 Thumbs.db
-
-# 排除本地配置文件（如果有）
-*.local

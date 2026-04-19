@@ -17,5 +17,5 @@ public class SensorReading {
     private Double pressure;       // 压力
     private Double temperature;    // 温度
     private Double speed;          // 转速
-    private Long eventTime;        // 事件时间/模拟时间戳
+    private Long eventTime;        // 事件时间
 }

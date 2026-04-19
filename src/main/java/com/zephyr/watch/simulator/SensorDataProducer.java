@@ -28,13 +28,23 @@ public class SensorDataProducer {
 
         try (BufferedReader br = new BufferedReader(new FileReader(JobConfig.DATA_FILE_PATH))) {
             String line;
+            int lineNo = 0;
             System.out.println("Zephyr-Watch 模拟器启动，开始向 Kafka 发送工业数据...");
 
             while ((line = br.readLine()) != null) {
+                lineNo++;
                 try {
                     String[] parts = line.trim().split("\\s+");
                     if (parts.length < 9) {
                         continue;
+                    }
+
+                    long now = System.currentTimeMillis();
+                    long eventTime = now;
+
+                    // 每 15 条制造一次 2 秒轻微乱序，便于测试事件时间窗口和 watermark
+                    if (lineNo % 15 == 0) {
+                        eventTime = now - 2000L;
                     }
 
                     SensorReading reading = new SensorReading();
@@ -43,7 +53,7 @@ public class SensorDataProducer {
                     reading.setPressure(Double.parseDouble(parts[6]));
                     reading.setTemperature(Double.parseDouble(parts[7]));
                     reading.setSpeed(Double.parseDouble(parts[8]));
-                    reading.setEventTime(System.currentTimeMillis());
+                    reading.setEventTime(eventTime);
 
                     String jsonString = JsonUtils.toJsonString(reading);
                     ProducerRecord<String, String> record =
