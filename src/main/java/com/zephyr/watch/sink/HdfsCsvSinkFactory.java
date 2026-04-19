@@ -8,15 +8,23 @@ import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.
 
 import java.time.Duration;
 
-public final class HdfsFeatureSinkFactory {
+public final class HdfsCsvSinkFactory {
 
-    private HdfsFeatureSinkFactory() {
+    private HdfsCsvSinkFactory() {
     }
 
-    public static FileSink<String> build() {
+    public static FileSink<String> buildDwdSensorCleanSink() {
+        return build(StorageConfig.DWD_SENSOR_CLEAN_PATH);
+    }
+
+    public static FileSink<String> buildDwsFeatureSink() {
+        return build(StorageConfig.DWS_DEVICE_FEATURE_PATH);
+    }
+
+    private static FileSink<String> build(String path) {
         return FileSink
                 .forRowFormat(
-                        new Path(StorageConfig.HDFS_FEATURE_OUTPUT_PATH),
+                        new Path(path),
                         new SimpleStringEncoder<String>(StorageConfig.OUTPUT_CHARSET)
                 )
                 .withRollingPolicy(

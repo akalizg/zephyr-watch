@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 窗口特征向量（阶段二：用于训练集生成）
+ * 窗口特征向量（DWS层）
  */
 @Data
 @AllArgsConstructor

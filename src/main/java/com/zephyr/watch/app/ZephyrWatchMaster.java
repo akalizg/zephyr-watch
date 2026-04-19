@@ -1,11 +1,11 @@
 package com.zephyr.watch.app;
 
 /**
- * 兼容旧启动入口
+ * 兼容旧入口，统一转到离线数仓作业
  */
 public class ZephyrWatchMaster {
 
     public static void main(String[] args) throws Exception {
-        OfflineFeatureJob.main(args);
+        OfflineWarehouseJob.main(args);
     }
 }

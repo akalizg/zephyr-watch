@@ -1,9 +1,9 @@
 package com.zephyr.watch.simulator;
 
+import com.alibaba.fastjson2.JSON;
 import com.zephyr.watch.config.JobConfig;
 import com.zephyr.watch.config.KafkaConfig;
 import com.zephyr.watch.model.SensorReading;
-import com.zephyr.watch.util.JsonUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -14,7 +14,7 @@ import java.io.FileReader;
 import java.util.Properties;
 
 /**
- * 读取 NASA 数据集并发送到 Kafka
+ * 读取 NASA C-MAPSS 数据并发送到 Kafka
  */
 public class SensorDataProducer {
 
@@ -41,8 +41,6 @@ public class SensorDataProducer {
 
                     long now = System.currentTimeMillis();
                     long eventTime = now;
-
-                    // 每 15 条制造一次 2 秒轻微乱序，便于测试事件时间窗口和 watermark
                     if (lineNo % 15 == 0) {
                         eventTime = now - 2000L;
                     }
@@ -55,20 +53,15 @@ public class SensorDataProducer {
                     reading.setSpeed(Double.parseDouble(parts[8]));
                     reading.setEventTime(eventTime);
 
-                    String jsonString = JsonUtils.toJsonString(reading);
-                    ProducerRecord<String, String> record =
-                            new ProducerRecord<String, String>(KafkaConfig.INPUT_TOPIC, jsonString);
-
-                    producer.send(record);
-                    System.out.println("已发送: " + jsonString);
+                    String json = JSON.toJSONString(reading);
+                    producer.send(new ProducerRecord<String, String>(KafkaConfig.INPUT_TOPIC, json));
+                    System.out.println("已发送: " + json);
 
                     Thread.sleep(JobConfig.PRODUCER_SLEEP_MS);
                 } catch (Exception lineEx) {
                     System.err.println("单行数据解析失败，已跳过。原始行: " + line);
                 }
             }
-        } catch (Exception e) {
-            System.err.println("发送失败，请检查文件路径或 Kafka 连接。报错信息：" + e.getMessage());
         } finally {
             producer.close();
             System.out.println("数据发送结束。");

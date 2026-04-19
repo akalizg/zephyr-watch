@@ -7,19 +7,19 @@ import com.zephyr.watch.process.EventTimeWatermarkStrategyFactory;
 import com.zephyr.watch.process.FeatureWindowProcessFunction;
 import com.zephyr.watch.process.JsonToSensorReadingMapFunction;
 import com.zephyr.watch.process.SensorValidationFilter;
-import com.zephyr.watch.sink.HdfsFeatureSinkFactory;
+import com.zephyr.watch.sink.HdfsCsvSinkFactory;
 import com.zephyr.watch.source.SensorKafkaSourceFactory;
-import com.zephyr.watch.util.JsonUtils;
+import com.zephyr.watch.util.CsvUtils;
 import org.apache.flink.api.common.RuntimeExecutionMode;
-import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 
-public class OfflineFeatureJob {
+public class OfflineWarehouseJob {
 
     public static void main(String[] args) throws Exception {
         System.setProperty("HADOOP_USER_NAME", "root");
@@ -35,26 +35,37 @@ public class OfflineFeatureJob {
                 "Kafka_Sensor_Source"
         );
 
-        SingleOutputStreamOperator<SensorReading> sensorStream = kafkaStream
+        SingleOutputStreamOperator<SensorReading> cleanStream = kafkaStream
                 .map(new JsonToSensorReadingMapFunction())
                 .filter(new SensorValidationFilter())
                 .assignTimestampsAndWatermarks(EventTimeWatermarkStrategyFactory.build());
 
-        SingleOutputStreamOperator<FeatureVector> featureStream = sensorStream
+        // DWD：清洗明细层
+        cleanStream
+                .map(new MapFunction<SensorReading, String>() {
+                    @Override
+                    public String map(SensorReading value) {
+                        return CsvUtils.toSensorCsv(value);
+                    }
+                })
+                .sinkTo(HdfsCsvSinkFactory.buildDwdSensorCleanSink());
+
+        // DWS：窗口特征层
+        SingleOutputStreamOperator<FeatureVector> featureStream = cleanStream
                 .keyBy(SensorReading::getMachineId)
                 .window(TumblingEventTimeWindows.of(Time.seconds(JobConfig.WINDOW_SECONDS)))
                 .process(new FeatureWindowProcessFunction());
 
-        featureStream.print("〖阶段二特征已提取〗--> ");
+        featureStream.print("〖DWS特征〗--> ");
 
         featureStream
                 .map(new MapFunction<FeatureVector, String>() {
                     @Override
                     public String map(FeatureVector value) {
-                        return JsonUtils.toJsonString(value);
+                        return CsvUtils.toFeatureCsv(value);
                     }
                 })
-                .sinkTo(HdfsFeatureSinkFactory.build());
+                .sinkTo(HdfsCsvSinkFactory.buildDwsFeatureSink());
 
         env.execute(JobConfig.OFFLINE_JOB_NAME);
     }

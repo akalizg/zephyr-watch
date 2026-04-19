@@ -5,13 +5,12 @@ public final class JobConfig {
     public static final int PARALLELISM = 1;
     public static final long CHECKPOINT_INTERVAL_MS = 10_000L;
 
-    // 阶段二：事件时间窗口
     public static final int WINDOW_SECONDS = 5;
     public static final int WATERMARK_OUT_OF_ORDERNESS_SECONDS = 3;
     public static final int WATERMARK_IDLE_SECONDS = 30;
 
-    public static final String OFFLINE_JOB_NAME = "Zephyr-Watch Offline Feature Job V2";
-    public static final String LOCAL_DEBUG_JOB_NAME = "Zephyr-Watch Local Debug Job V2";
+    public static final String OFFLINE_JOB_NAME = "Zephyr-Watch DWD+DWS Offline Job";
+    public static final String LOCAL_DEBUG_JOB_NAME = "Zephyr-Watch Local Debug Job";
 
     public static final String DATA_FILE_PATH = "data/train_FD001.txt";
     public static final long PRODUCER_SLEEP_MS = 500L;
