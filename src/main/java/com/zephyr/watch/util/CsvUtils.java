@@ -26,7 +26,7 @@ public final class CsvUtils {
     public static String toFeatureCsv(FeatureVector f) {
         return String.format(
                 Locale.US,
-                "%d,%d,%d,%d,%d," +
+                "%d,%d,%d,%d,%d,%d," +
                         "%.6f,%.6f,%.6f,%.6f,%.6f," +
                         "%.6f,%.6f,%.6f,%.6f,%.6f," +
                         "%.6f,%.6f,%.6f,%.6f,%.6f",
@@ -34,6 +34,7 @@ public final class CsvUtils {
                 f.getWindowStart(),
                 f.getWindowEnd(),
                 f.getSampleCount(),
+                f.getCycleStart(),
                 f.getCycleEnd(),
 
                 f.getPressureMin(),
