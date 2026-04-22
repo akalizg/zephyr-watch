@@ -1,7 +1,0 @@
-{
-  "source_file": "D:\\Javatest\\zephyr-watch\\data\\train_FD001.txt",
-  "expected_total_rows": 20631,
-  "expected_machine_count": 100,
-  "min_machine_id": 1,
-  "max_machine_id": 100
-}

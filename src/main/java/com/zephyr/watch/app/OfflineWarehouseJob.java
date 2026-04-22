@@ -20,7 +20,9 @@ import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
-
+import org.apache.flink.streaming.connectors.redis.common.config.FlinkJedisPoolConfig;
+import org.apache.flink.streaming.connectors.redis.RedisSink;
+import com.zephyr.watch.sink.RulRedisMapper;
 import java.net.URL;
 
 public class OfflineWarehouseJob {
@@ -93,8 +95,23 @@ public class OfflineWarehouseJob {
         predictionStream.print("🔥🔥🔥 实时寿命预测结果");
 
         // =====================================================================
+        // ================== 新增的 Redis 实时热点缓存链路 ======================
+        // =====================================================================
 
-        // 触发执行
+        // 4. 配置 Flink 专属的 Redis 连接池
+        org.apache.flink.streaming.connectors.redis.common.config.FlinkJedisPoolConfig conf =
+                new org.apache.flink.streaming.connectors.redis.common.config.FlinkJedisPoolConfig.Builder()
+                        .setHost("127.0.0.1")
+                        .setPort(6379)
+                        .build();
+
+        // 5. 将预测流直接打入 Redis！
+        predictionStream.addSink(new org.apache.flink.streaming.connectors.redis.RedisSink<>(conf, new com.zephyr.watch.sink.RulRedisMapper()))
+                .name("Redis_RUL_Sink");
+
+        // =====================================================================
+
+        // 触发执行 (这行是整个程序的最后一行)
         env.execute(JobConfig.OFFLINE_JOB_NAME);
     }
 }

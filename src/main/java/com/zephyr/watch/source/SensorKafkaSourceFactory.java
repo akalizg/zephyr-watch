@@ -15,7 +15,7 @@ public final class SensorKafkaSourceFactory {
                 .setBootstrapServers(KafkaConfig.BOOTSTRAP_SERVERS)
                 .setTopics(KafkaConfig.INPUT_TOPIC)
                 .setGroupId(KafkaConfig.GROUP_ID)
-                .setStartingOffsets(OffsetsInitializer.latest())
+                .setStartingOffsets(OffsetsInitializer.earliest())
                 .setValueOnlyDeserializer(new SimpleStringSchema())
                 .build();
     }

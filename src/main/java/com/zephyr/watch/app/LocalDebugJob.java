@@ -4,6 +4,7 @@ import com.zephyr.watch.config.JobConfig;
 import com.zephyr.watch.model.SensorReading;
 import com.zephyr.watch.process.EventTimeWatermarkStrategyFactory;
 import com.zephyr.watch.process.FeatureWindowProcessFunction;
+import com.zephyr.watch.process.RulPredictFunction;
 import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
@@ -43,7 +44,9 @@ public class LocalDebugJob {
                 .keyBy(SensorReading::getMachineId)
                 .window(TumblingEventTimeWindows.of(Time.seconds(2)))
                 .process(new FeatureWindowProcessFunction())
-                .print("〖本地调试阶段二特征〗--> ");
+// 加上这一行，路径故意写错
+                .map(new RulPredictFunction("D:/Javatest/zephyr-watch/src/main/resources/models/model.pmml"))
+                .print("〖预测测试〗--> ");
 
         env.execute(JobConfig.LOCAL_DEBUG_JOB_NAME);
     }
