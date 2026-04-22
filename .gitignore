@@ -6,3 +6,4 @@ logs/
 .DS_Store
 Thumbs.db
 .venv1/
+__pycache__/
