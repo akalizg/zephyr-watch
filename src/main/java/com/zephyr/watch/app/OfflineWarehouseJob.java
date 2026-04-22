@@ -3,6 +3,8 @@ package com.zephyr.watch.app;
 import com.zephyr.watch.config.JobConfig;
 import com.zephyr.watch.model.FeatureVector;
 import com.zephyr.watch.model.SensorReading;
+import com.zephyr.watch.model.RulPrediction; // 引入新写的预测实体类
+import com.zephyr.watch.process.RulPredictFunction; // 引入新写的预测算子
 import com.zephyr.watch.process.EventTimeWatermarkStrategyFactory;
 import com.zephyr.watch.process.FeatureWindowProcessFunction;
 import com.zephyr.watch.process.JsonToSensorReadingMapFunction;
@@ -18,6 +20,8 @@ import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
+
+import java.net.URL;
 
 public class OfflineWarehouseJob {
 
@@ -50,7 +54,7 @@ public class OfflineWarehouseJob {
                 })
                 .sinkTo(HdfsCsvSinkFactory.buildDwdSensorCleanSink());
 
-        // DWS：窗口特征层
+        // DWS：窗口特征层 (你的特征流在这里已经算好了)
         SingleOutputStreamOperator<FeatureVector> featureStream = cleanStream
                 .keyBy(SensorReading::getMachineId)
                 .window(TumblingEventTimeWindows.of(Time.seconds(JobConfig.WINDOW_SECONDS)))
@@ -58,6 +62,7 @@ public class OfflineWarehouseJob {
 
         featureStream.print("〖DWS特征〗--> ");
 
+        // 继续往 HDFS 写离线数据 (原有的逻辑保留)
         featureStream
                 .map(new MapFunction<FeatureVector, String>() {
                     @Override
@@ -67,6 +72,29 @@ public class OfflineWarehouseJob {
                 })
                 .sinkTo(HdfsCsvSinkFactory.buildDwsFeatureSink());
 
+        // =====================================================================
+        // ================== 新增的 AI 在线推理链路 (Branch B) ==================
+        // =====================================================================
+
+        // 1. 获取 PMML 文件的路径 (为了防止 Windows 路径踩坑，建议第一次测试直接写死本地绝对路径)
+        // 请确保下面这个路径里确实有 model.pmml 文件！！！
+        String pmmlPath = "D:/Javatest/zephyr-watch/src/main/resources/models/model.pmml";
+
+        // 如果你想动态获取 resources 目录下的路径，可以用下面两行替换上一行：
+        // URL resource = OfflineWarehouseJob.class.getResource("/models/model.pmml");
+        // String pmmlPath = resource.getPath().replaceFirst("^/(.:/)", "$1");
+
+        // 2. 将已经算好的 featureStream 接入你的预测算子！
+        SingleOutputStreamOperator<RulPrediction> predictionStream = featureStream
+                .map(new RulPredictFunction(pmmlPath))
+                .name("PMML_RUL_Prediction");
+
+        // 3. 终极点火测试：将预测算出的“剩余寿命”打印到控制台！
+        predictionStream.print("🔥🔥🔥 实时寿命预测结果");
+
+        // =====================================================================
+
+        // 触发执行
         env.execute(JobConfig.OFFLINE_JOB_NAME);
     }
 }
