@@ -1135,7 +1135,6 @@ zephyr-watch
 ├── prometheus
 │   └── prometheus.yml
 │
-├── docker-compose.yml
 ├── pom.xml
 └── README.md
 ```
