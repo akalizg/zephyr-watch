@@ -1378,7 +1378,7 @@ Kafka 消息堆积
 
 | 模块 | 待实现内容 |
 |---|---|
-| Flink | 升级 1.17+、滑动窗口、状态后端、Exactly-Once、CEP、Side Output |
+| Flink | 滑动窗口、状态后端、Exactly-Once、CEP、Side Output |
 | 机器学习 | 4 种基线模型、PR-AUC、阈值优化、模型融合、SHAP、无监督异常检测 |
 | 模型部署 | PMML/ONNX、MinIO 模型仓库、模型版本管理 |
 | 输出告警 | MySQL Sink、Kafka Alert Topic、企业微信/钉钉 Webhook |
