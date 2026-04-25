@@ -40,7 +40,6 @@ public class OfflineWarehouseJob {
                 WatermarkStrategy.noWatermarks(),
                 "Kafka_Sensor_Source"
         );
-
         SingleOutputStreamOperator<SensorReading> cleanStream = kafkaStream
                 .map(new JsonToSensorReadingMapFunction())
                 .filter(new SensorValidationFilter())
