@@ -1,0 +1,7 @@
+{
+  "riskAlertThreshold": 0.7,
+  "riskCriticalThreshold": 0.9,
+  "rulWarningThreshold": 60.0,
+  "rulCriticalThreshold": 30.0,
+  "riskStrategy": "rul_logistic_with_feature_volatility"
+}

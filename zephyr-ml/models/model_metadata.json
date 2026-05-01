@@ -1,0 +1,11 @@
+{
+  "modelVersion": "pmml-local-rul-v1",
+  "modelType": "RandomForestRegressor_PMML",
+  "modelUri": "model.pmml",
+  "fallbackModelUri": "model.pkl",
+  "thresholdUri": "threshold.json",
+  "featureColumnsUri": "feature_columns.json",
+  "targetColumn": "RUL",
+  "runtime": "Flink JPMML",
+  "status": "LOCAL_READY"
+}
