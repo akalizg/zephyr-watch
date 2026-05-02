@@ -42,6 +42,10 @@ public class AlertReviewService {
         return result;
     }
 
+    public List<Map<String, Object>> reviewLabels(int limit) {
+        return repository.findReviewedLabels(normalizeLimit(limit));
+    }
+
     private void validate(AlertReviewRequest request) {
         if (request == null || !StringUtils.hasText(request.getAlertId())) {
             throw new IllegalArgumentException("alertId is required");

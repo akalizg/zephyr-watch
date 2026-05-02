@@ -1173,29 +1173,43 @@ Hive 中可以 SELECT 查询特征数据
 进入：
 
 ```text
-zephyr_ml
+zephyr-ml
 ```
 
-执行：
+安装依赖并执行 P1 基线训练：
 
 ```bash
-python data/build_dataset_from_hive.py
-python train/train_baselines.py
-python train/tune_xgboost_optuna.py
-python train/threshold_search.py
-python train/ensemble_train.py
-python train/unsupervised_anomaly.py
-python explain/shap_explain.py
-python train/export_model.py
+python -m pip install -r requirements.txt
+python train/train_baselines.py --require-all
+python train/register_model.py --activate
 ```
+
+`train_baselines.py` 会训练 Logistic Regression、Random Forest、XGBoost、LightGBM，按 PR-AUC 选择最佳模型，并输出 `threshold.json`、`model_metadata.json`、PR 曲线、混淆矩阵、特征重要性和可选 SHAP 图。`train_xgb.py` 保留为兼容入口，内部转发到同一套基线训练流程。
+`register_model.py` 会调用 Spring Boot API 写入 `model_registry`，用于 Grafana 和在线推理任务查看当前模型版本。
+
+人工审核闭环的周期性再训练入口：
+
+```bash
+python train/incremental_retrain.py --require-all --register --activate
+```
+
+`incremental_retrain.py` 会调用 `GET /api/learning/review-labels` 导出审核标签到 `data/review_labels.csv`，随后复用 P1 基线训练流程，并可自动注册和激活新模型。生产环境中可将该命令放入 Windows 任务计划程序或 CI 定时任务。
 
 训练完成后生成：
 
 ```text
-best_model.pmml
+best_risk_model.pkl
+logistic_regression.pkl
+random_forest.pkl
+xgboost.pkl
+lightgbm.pkl
+feature_columns.json
 threshold.json
-metrics_report.csv
-模型评估图表
+model_metadata.json
+reports/metrics_report.json
+reports/pr_curve_compare.png
+reports/confusion_matrix.png
+reports/feature_importance.png
 ```
 
 ---
@@ -1456,6 +1470,3 @@ Flink 特征工程
     ↓
 Grafana 可视化
 ```
-
-
-

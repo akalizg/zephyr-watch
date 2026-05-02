@@ -1,0 +1,95 @@
+{
+  "createdAt": "2026-05-03 00:55:50",
+  "input": "D:\\Javatest\\zephyr-watch\\zephyr-ml\\data\\train_dataset.csv",
+  "trainSamples": 16561,
+  "testSamples": 4070,
+  "positiveTrainSamples": 2480,
+  "positiveTestSamples": 620,
+  "metrics": [
+    {
+      "model": "logistic_regression",
+      "threshold": {
+        "threshold": 0.84,
+        "f1": 0.8951612903225806,
+        "precision": 0.8951612903225806,
+        "recall": 0.8951612903225806
+      },
+      "accuracy": 0.9680589680589681,
+      "precision": 0.8951612903225806,
+      "recall": 0.8951612903225806,
+      "f1": 0.8951612903225806,
+      "pr_auc": 0.9628155731236835,
+      "confusionMatrix": {
+        "tn": 3385,
+        "fp": 65,
+        "fn": 65,
+        "tp": 555
+      },
+      "roc_auc": 0.992087891538102
+    },
+    {
+      "model": "xgboost",
+      "threshold": {
+        "threshold": 0.76,
+        "f1": 0.8785942492012779,
+        "precision": 0.870253164556962,
+        "recall": 0.8870967741935484
+      },
+      "accuracy": 0.9626535626535626,
+      "precision": 0.870253164556962,
+      "recall": 0.8870967741935484,
+      "f1": 0.8785942492012779,
+      "pr_auc": 0.9574313906469042,
+      "confusionMatrix": {
+        "tn": 3368,
+        "fp": 82,
+        "fn": 70,
+        "tp": 550
+      },
+      "roc_auc": 0.990312762973352
+    },
+    {
+      "model": "lightgbm",
+      "threshold": {
+        "threshold": 0.71,
+        "f1": 0.8794212218649518,
+        "precision": 0.8766025641025641,
+        "recall": 0.882258064516129
+      },
+      "accuracy": 0.9631449631449631,
+      "precision": 0.8766025641025641,
+      "recall": 0.882258064516129,
+      "f1": 0.8794212218649518,
+      "pr_auc": 0.9555149695966703,
+      "confusionMatrix": {
+        "tn": 3373,
+        "fp": 77,
+        "fn": 73,
+        "tp": 547
+      },
+      "roc_auc": 0.9901056568489949
+    },
+    {
+      "model": "random_forest",
+      "threshold": {
+        "threshold": 0.62,
+        "f1": 0.8763308763308764,
+        "precision": 0.8901830282861897,
+        "recall": 0.8629032258064516
+      },
+      "accuracy": 0.9628992628992629,
+      "precision": 0.8901830282861897,
+      "recall": 0.8629032258064516,
+      "f1": 0.8763308763308764,
+      "pr_auc": 0.9541294637755467,
+      "confusionMatrix": {
+        "tn": 3384,
+        "fp": 66,
+        "fn": 85,
+        "tp": 535
+      },
+      "roc_auc": 0.9899878447872839
+    }
+  ],
+  "skippedModels": []
+}
