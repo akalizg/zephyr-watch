@@ -1,7 +1,7 @@
 package com.zephyr.watch.flink.app;
 
 /**
- * 鍏煎鏃у叆鍙ｏ紝缁熶竴杞埌绂荤嚎鏁颁粨浣滀笟
+ * Compatibility entry point that delegates to the online inference job.
  */
 public class ZephyrWatchMaster {
 
@@ -9,4 +9,3 @@ public class ZephyrWatchMaster {
         OnlineInferenceJob.main(args);
     }
 }
-

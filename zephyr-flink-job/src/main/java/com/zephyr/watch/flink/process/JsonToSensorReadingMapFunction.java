@@ -11,7 +11,7 @@ public class JsonToSensorReadingMapFunction implements MapFunction<String, Senso
         try {
             return JSON.parseObject(value, SensorReading.class);
         } catch (Exception e) {
-            System.err.println("JSON 瑙ｆ瀽澶辫触锛屽凡璺宠繃銆傚師濮嬫暟鎹細" + value);
+            System.err.println("Failed to parse sensor JSON, skipping raw value: " + value);
             return null;
         }
     }

@@ -1,6 +1,21 @@
 server:
   port: 8080
 
+spring:
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/zephyr_watch?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: root
+    password: nisibusisa250
+    driver-class-name: com.mysql.jdbc.Driver
+  redis:
+    host: 127.0.0.1
+    port: 6379
+  kafka:
+    bootstrap-servers: 192.168.88.161:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
 management:
   endpoints:
     web:

@@ -4,7 +4,11 @@ import com.zephyr.watch.common.entity.FeatureVector;
 import com.zephyr.watch.common.entity.RulPrediction;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.configuration.Configuration;
-import org.jpmml.evaluator.*;
+import org.jpmml.evaluator.Evaluator;
+import org.jpmml.evaluator.EvaluatorUtil;
+import org.jpmml.evaluator.InputField;
+import org.jpmml.evaluator.LoadingModelEvaluatorBuilder;
+import org.jpmml.evaluator.TargetField;
 
 import java.io.File;
 import java.util.LinkedHashMap;
@@ -13,7 +17,6 @@ import java.util.Map;
 
 public class RulPredictFunction extends RichMapFunction<FeatureVector, RulPrediction> {
 
-    // PMML 璇勪及鍣ㄥ疄渚?
     private transient Evaluator evaluator;
     private final String pmmlFilePath;
 
@@ -48,21 +51,17 @@ public class RulPredictFunction extends RichMapFunction<FeatureVector, RulPredic
 
     @Override
     public RulPrediction map(FeatureVector fv) throws Exception {
-        Map<String, Object> arguments = new LinkedHashMap<>();
+        Map<String, Object> arguments = new LinkedHashMap<String, Object>();
 
-        // 鑷姩鎻愬彇妯″瀷鎵€闇€鐨勮緭鍏ョ壒寰?
         List<? extends InputField> inputFields = evaluator.getInputFields();
         for (InputField inputField : inputFields) {
-            // JPMML 1.6.4 鏋佸叾绮剧畝鐨?API锛岀洿鎺ヨ繑鍥?String锛?
             String name = inputField.getName();
             Object value = extractValueFromFeatureVector(fv, name);
             arguments.put(name, value);
         }
 
-        // 姣绾ф墽琛屾ā鍨嬮娴?
         Map<String, ?> results = evaluator.evaluate(arguments);
 
-        // 鎻愬彇棰勬祴缁撴灉 RUL
         List<? extends TargetField> targetFields = evaluator.getTargetFields();
         TargetField targetField = targetFields.get(0);
         Object targetValue = results.get(targetField.getName());
@@ -72,7 +71,6 @@ public class RulPredictFunction extends RichMapFunction<FeatureVector, RulPredic
         return new RulPrediction(fv.getMachineId(), fv.getWindowEnd(), rulPrediction);
     }
 
-    // 杈呭姪鏂规硶锛氭妸 FeatureVector 鐨勫睘鎬ф彁鍙栧嚭鏉ュ杺缁欐ā鍨?
     private Object extractValueFromFeatureVector(FeatureVector fv, String fieldName) {
         switch (fieldName) {
             case "pressureMin": return fv.getPressureMin();

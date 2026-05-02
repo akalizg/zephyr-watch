@@ -2,6 +2,7 @@ package com.zephyr.watch.flink.sink;
 
 import com.zephyr.watch.common.constants.StorageConfig;
 import com.zephyr.watch.common.entity.AlertEvent;
+import com.zephyr.watch.common.entity.MaintenanceRecommendation;
 import com.zephyr.watch.common.entity.RiskPrediction;
 import org.apache.flink.connector.jdbc.JdbcConnectionOptions;
 import org.apache.flink.connector.jdbc.JdbcExecutionOptions;
@@ -39,6 +40,14 @@ public final class MySqlSinkFactory {
         return JdbcSink.sink(sql, MySqlSinkFactory::bindAlertEvent, executionOptions(), connectionOptions());
     }
 
+    public static SinkFunction<MaintenanceRecommendation> buildRecommendationSink() {
+        String sql = "INSERT INTO maintenance_recommendation "
+                + "(alert_id, machine_id, action, spare_parts, work_order_priority, similar_case_id, score) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?)";
+
+        return JdbcSink.sink(sql, MySqlSinkFactory::bindRecommendation, executionOptions(), connectionOptions());
+    }
+
     private static void bindRiskPrediction(PreparedStatement ps, RiskPrediction value) throws SQLException {
         ps.setString(1, value.getPredictionId());
         ps.setInt(2, value.getMachineId());
@@ -66,6 +75,16 @@ public final class MySqlSinkFactory {
         ps.setString(9, value.getSource());
         ps.setString(10, value.getStatus());
         ps.setString(11, value.getModelVersion());
+    }
+
+    private static void bindRecommendation(PreparedStatement ps, MaintenanceRecommendation value) throws SQLException {
+        ps.setString(1, value.getAlertId());
+        ps.setInt(2, value.getMachineId());
+        ps.setString(3, value.getAction());
+        ps.setString(4, value.getSpareParts());
+        ps.setString(5, value.getWorkOrderPriority());
+        ps.setString(6, value.getSimilarCaseId());
+        ps.setDouble(7, value.getScore());
     }
 
     private static JdbcExecutionOptions executionOptions() {
