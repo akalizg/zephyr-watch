@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 鍘熷/娓呮礂鍚庣殑浼犳劅鍣ㄦ暟鎹?
+ * Raw or cleaned sensor reading.
  */
 @Data
 @AllArgsConstructor

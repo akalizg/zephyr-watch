@@ -29,5 +29,25 @@ public final class SensorKafkaSourceFactory {
                 .setValueOnlyDeserializer(new SimpleStringSchema())
                 .build();
     }
+
+    public static KafkaSource<String> buildAlertEventSource() {
+        return KafkaSource.<String>builder()
+                .setBootstrapServers(KafkaConfig.BOOTSTRAP_SERVERS)
+                .setTopics(KafkaConfig.ALERT_EVENT_TOPIC)
+                .setGroupId(KafkaConfig.RECOMMENDATION_GROUP_ID)
+                .setStartingOffsets(OffsetsInitializer.earliest())
+                .setValueOnlyDeserializer(new SimpleStringSchema())
+                .build();
+    }
+
+    public static KafkaSource<String> buildReviewLabelSource() {
+        return KafkaSource.<String>builder()
+                .setBootstrapServers(KafkaConfig.BOOTSTRAP_SERVERS)
+                .setTopics(KafkaConfig.REVIEW_LABEL_TOPIC)
+                .setGroupId(KafkaConfig.ALERT_REVIEW_GROUP_ID)
+                .setStartingOffsets(OffsetsInitializer.earliest())
+                .setValueOnlyDeserializer(new SimpleStringSchema())
+                .build();
+    }
 }
 

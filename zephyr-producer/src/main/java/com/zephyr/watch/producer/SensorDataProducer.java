@@ -15,7 +15,7 @@ import java.io.FileReader;
 import java.util.Properties;
 
 /**
- * 鐠囪褰?NASA C-MAPSS 閺佺増宓侀獮璺哄絺闁礁鍩?Kafka
+ * Streams NASA C-MAPSS sensor rows to Kafka for local demos.
  */
 public class SensorDataProducer {
 
@@ -30,7 +30,7 @@ public class SensorDataProducer {
         try (BufferedReader br = new BufferedReader(new FileReader(JobConfig.DATA_FILE_PATH))) {
             String line;
             int lineNo = 0;
-            System.out.println("Zephyr-Watch 濡剝瀚欓崳銊ユ儙閸旑煉绱濆鈧慨瀣倻 Kafka 閸欐垿鈧礁浼愭稉姘殶閹?..");
+            System.out.println("Zephyr-Watch sensor producer is streaming NASA C-MAPSS rows to Kafka...");
 
             while ((line = br.readLine()) != null) {
                 lineNo++;
@@ -60,11 +60,11 @@ public class SensorDataProducer {
                             System.err.println("Kafka send failed: " + exception.getMessage());
                         }
                     });
-                    System.out.println("瀹告彃褰傞柅? " + json);
+                    System.out.println("Sent sensor reading: " + json);
 
                     Thread.sleep(JobConfig.PRODUCER_SLEEP_MS);
                 } catch (Exception lineEx) {
-                    System.err.println("閸楁洝顢戦弫鐗堝祦鐟欙絾鐎芥径杈Е閿涘苯鍑＄捄瀹犵箖閵嗗倸甯慨瀣攽: " + line);
+                    System.err.println("Skip invalid sensor row: " + line);
                 }
             }
         } finally {

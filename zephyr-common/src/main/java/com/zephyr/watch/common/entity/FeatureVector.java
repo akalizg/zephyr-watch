@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 绐楀彛鐗瑰緛鍚戦噺锛圖WS灞傦級
+ * Window-level feature vector for the DWS layer.
  */
 @Data
 @AllArgsConstructor
