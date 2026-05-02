@@ -47,4 +47,16 @@ public class AlertRepository {
                 alertId
         );
     }
+
+    public List<Map<String, Object>> findReviewedLabels(int limit) {
+        return jdbcTemplate.queryForList(
+                "SELECT ar.review_id, ar.alert_id, ar.reviewer, ar.review_label, ar.review_comment, ar.reviewed_at, "
+                        + "ae.machine_id, ae.event_time, ae.risk_probability, ae.rul, ae.risk_level, "
+                        + "ae.alert_type, ae.model_version "
+                        + "FROM alert_review ar "
+                        + "LEFT JOIN alert_event ae ON ar.alert_id = ae.alert_id "
+                        + "ORDER BY ar.reviewed_at DESC LIMIT ?",
+                limit
+        );
+    }
 }

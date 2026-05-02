@@ -7,3 +7,10 @@ logs/
 Thumbs.db
 .venv1/
 __pycache__/
+zephyr-ml/data/review_labels.csv
+zephyr-ml/reports/incremental_retrain_summary.json
+zephyr-ml/models/best_risk_model.pkl
+zephyr-ml/models/logistic_regression.pkl
+zephyr-ml/models/random_forest.pkl
+zephyr-ml/models/xgboost.pkl
+zephyr-ml/models/lightgbm.pkl
