@@ -1,0 +1,15 @@
+{
+  "java.configuration.runtimes": [
+    {
+      "name": "JavaSE-1.8",
+      "path": "C:\\Users\\admin\\.jdks\\corretto-1.8.0_462",
+      "default": true
+    }
+  ],
+  "maven.terminal.useJavaHome": true,
+  "java.import.maven.enabled": true,
+  "terminal.integrated.env.windows": {
+    "JAVA_HOME": "C:\\Users\\admin\\.jdks\\corretto-1.8.0_462",
+    "Path": "C:\\Users\\admin\\.jdks\\corretto-1.8.0_462\\bin;${env:Path}"
+  }
+}
