@@ -1,0 +1,13 @@
+apiVersion: 1
+
+datasources:
+  - name: ZephyrMySQL
+    type: mysql
+    access: proxy
+    url: ${ZEPHYR_GRAFANA_MYSQL_URL:host.docker.internal:3306}
+    database: ${ZEPHYR_GRAFANA_MYSQL_DATABASE:zephyr_watch}
+    user: ${ZEPHYR_GRAFANA_MYSQL_USER:root}
+    secureJsonData:
+      password: ${ZEPHYR_GRAFANA_MYSQL_PASSWORD:your_password}
+    jsonData:
+      tlsSkipVerify: true

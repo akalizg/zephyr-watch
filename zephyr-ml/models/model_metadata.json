@@ -1,32 +1,4 @@
 {
-  "modelVersion": "risk-baseline-20260503005550",
-  "modelType": "P1_RiskClassification_Baselines",
-  "modelUri": "best_risk_model.pkl",
-  "thresholdUri": "threshold.json",
-  "featureColumnsUri": "feature_columns.json",
-  "metadataUri": "model_metadata.json",
-  "bestModel": "logistic_regression",
-  "selectionMetric": "pr_auc",
-  "metrics": {
-    "model": "logistic_regression",
-    "threshold": {
-      "threshold": 0.84,
-      "f1": 0.8951612903225806,
-      "precision": 0.8951612903225806,
-      "recall": 0.8951612903225806
-    },
-    "accuracy": 0.9680589680589681,
-    "precision": 0.8951612903225806,
-    "recall": 0.8951612903225806,
-    "f1": 0.8951612903225806,
-    "pr_auc": 0.9628155731236835,
-    "confusionMatrix": {
-      "tn": 3385,
-      "fp": 65,
-      "fn": 65,
-      "tp": 555
-    },
-    "roc_auc": 0.992087891538102
-  },
-  "status": "LOCAL_READY"
+  "modelVersion": "risk-baseline-local-v1",
+  "modelType": "P1_RiskClassification_Baselines"
 }

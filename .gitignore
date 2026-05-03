@@ -1,4 +1,5 @@
 .idea/
+**/.idea/
 *.iml
 target/
 logs/
@@ -6,7 +7,9 @@ logs/
 .DS_Store
 Thumbs.db
 .venv1/
+**/.venv1/
 __pycache__/
+**/__pycache__/
 zephyr-ml/data/review_labels.csv
 zephyr-ml/reports/incremental_retrain_summary.json
 zephyr-ml/models/best_risk_model.pkl

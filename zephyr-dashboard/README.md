@@ -1,13 +1,14 @@
 # Zephyr Dashboard
 
-This module is reserved for Grafana dashboards and optional frontend assets.
+Grafana assets for the Zephyr-Watch business dashboard.
 
-Planned panels:
+Provision the MySQL datasource from `grafana/provisioning/datasources/mysql.yml`, then import `grafana/dashboards/zephyr-watch-business.json`.
 
-- Device risk probability trend
-- RUL trend
-- High-risk alert list
-- Hourly alert count
-- Maintenance recommendations
-- Flink throughput, checkpoint, and Kafka lag
-- Model version status
+Set these environment variables for Grafana when the defaults do not match your machine:
+
+```bash
+ZEPHYR_GRAFANA_MYSQL_URL=host.docker.internal:3306
+ZEPHYR_GRAFANA_MYSQL_DATABASE=zephyr_watch
+ZEPHYR_GRAFANA_MYSQL_USER=root
+ZEPHYR_GRAFANA_MYSQL_PASSWORD=your_password
+```

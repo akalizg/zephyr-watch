@@ -25,13 +25,13 @@ public final class KafkaJsonSinkFactory {
 
     private static KafkaSink<String> build(String topic, String transactionalIdPrefix) {
         return KafkaSink.<String>builder()
-                .setBootstrapServers(KafkaConfig.BOOTSTRAP_SERVERS)
-                .setRecordSerializer(KafkaRecordSerializationSchema.builder()
-                        .setTopic(topic)
-                        .setValueSerializationSchema(new SimpleStringSchema())
-                        .build())
-                .setDeliverGuarantee(DeliveryGuarantee.AT_LEAST_ONCE)
-                .build();
+            .setBootstrapServers(KafkaConfig.BOOTSTRAP_SERVERS)
+            .setRecordSerializer(KafkaRecordSerializationSchema.builder()
+                .setTopic(topic)
+                .setValueSerializationSchema(new SimpleStringSchema())
+                .build())
+            .setDeliverGuarantee(DeliveryGuarantee.EXACTLY_ONCE)
+            .setTransactionalIdPrefix(transactionalIdPrefix)
+            .build();
     }
 }
-
