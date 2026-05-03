@@ -968,25 +968,29 @@ Grafana 不仅展示业务结果，还展示系统运行状态。
 
 ```sql
 SELECT
-  created_at AS time,
+  FROM_UNIXTIME(event_time / 1000) AS time,
   risk_probability,
   machine_id AS metric
 FROM device_risk_prediction
-WHERE $__timeFilter(created_at);
+WHERE $__timeFilter(FROM_UNIXTIME(event_time / 1000))
+ORDER BY time;
 ```
 
 ### 高风险告警列表
 
 ```sql
 SELECT
-  created_at AS time,
+  FROM_UNIXTIME(event_time / 1000) AS time,
   machine_id,
   risk_probability,
   risk_level,
-  message
+  alert_type,
+  message,
+  status,
+  model_version
 FROM alert_event
 WHERE risk_level IN ('HIGH', 'CRITICAL')
-ORDER BY created_at DESC
+ORDER BY event_time DESC
 LIMIT 50;
 ```
 
@@ -1010,8 +1014,9 @@ SELECT
   machine_id,
   action,
   spare_parts,
-  score,
-  recommend_reason
+  work_order_priority,
+  similar_case_id,
+  score
 FROM maintenance_recommendation
 ORDER BY created_at DESC
 LIMIT 20;
@@ -1246,15 +1251,19 @@ Kafka 实时传感器数据
     ↓
 Flink 清洗与滑动窗口特征提取
     ↓
-加载 PMML / ONNX 模型
+PMML RUL 辅助预测
     ↓
-输出 riskProbability 和 RUL
+REST 风险分类模型服务
     ↓
-正常流写 MySQL / Redis
+输出 rul、riskProbability、riskLabel、riskLevel
     ↓
-异常流写 Kafka / MySQL / 企业微信 / 钉钉
+正常结果写 MySQL / Redis / Kafka
     ↓
-触发推荐系统
+高风险事件写 Kafka / MySQL / Webhook
+    ↓
+触发 RecommendJob 生成维修建议
+    ↓
+Grafana 展示
 ```
 
 ---
@@ -1301,41 +1310,49 @@ Kafka 消息堆积
 模型版本信息
 ```
 
----
+## 十二、当前完成状态
 
-## 当前完成状态
+### 1. 已完成能力
 
-### 已完成
-- 多模块 Maven 工程
-- Kafka 数据接入
-- Flink 实时清洗、窗口特征、状态后端、Checkpoint
-- REST 风险模型服务
-- PMML RUL 辅助推理
-- MySQL / Redis / Kafka 风险结果输出
-- 阈值告警和 CEP 连续高风险告警
-- 告警事件写 MySQL / Kafka / Webhook Sink
-- Spring Boot 风险查询、告警审核、推荐查询、模型注册接口
-- P1 风险分类训练脚本
-- MinIO 模型上传注册脚本
-- 推荐系统 v0：规则 + 相似案例
+- 多模块 Maven 工程：zephyr-common、zephyr-flink-job、zephyr-api、zephyr-ml、zephyr-producer、zephyr-dashboard
+- Kafka 实时数据接入
+- Flink 实时清洗、窗口特征、Side Output、Checkpoint、CEP 连续高风险检测
+- PMML RUL 辅助预测
+- REST 风险分类模型服务
+- Flink 在线调用 REST 模型服务输出 riskProbability / riskLabel / riskLevel
+- MySQL 风险预测结果表 device_risk_prediction
+- MySQL 告警事件表 alert_event
+- Redis 最新风险状态缓存
+- Kafka risk_prediction_topic、alert_event_topic、review_label_topic、invalid_sensor_topic
+- Spring Boot API：风险查询、告警审核、推荐查询、模型注册、反馈样本导出、Webhook 配置
+- 人工审核标签回流：alert_review、review_label_feedback、feedback_training_sample
+- 增量重训入口 incremental_retrain.py
+- MinIO 模型上传与 model_registry 注册
+- 推荐系统 v0：相似案例 / 规则推荐
 - Grafana MySQL 业务 Dashboard
+- Prometheus 抓取配置初版
+- Windows 一键启动脚本 run-all.bat
 
-### 进行中
-- 一键启动模型服务
-- 审核反馈转训练样本
-- Prometheus 系统监控
-- Webhook 配置管理
-- 分类模型 PMML/ONNX 导出
+### 2. 进行中能力
+
+- README 与真实代码完全同步
+- 模型产物生成规范
+- Prometheus 系统监控 Dashboard
 - Hive ADS 层
+- Webhook 配置测试发送、删除、风险级别过滤
+- 分类模型 PMML / ONNX 导出
+- Linux / Mac 启动脚本
+- Docker Compose 基础设施脚本
+- Flink Async I/O REST 推理
 
-### 后续扩展
-- Two-Tower
-- LightGCN
-- SASRec / BERT4Rec
-- CatBoost / MLP / 无监督异常检测
-- Flink Async I/O 推理优化
+### 3. 后续加分扩展
 
----
+- CatBoost / MLP
+- Isolation Forest / One-Class SVM
+- Voting / Weighted Average 模型融合
+- Two-Tower 推荐
+- LightGCN 推荐
+- SASRec / BERT4Rec 序列推荐
 
 ## 十三、项目创新点
 
