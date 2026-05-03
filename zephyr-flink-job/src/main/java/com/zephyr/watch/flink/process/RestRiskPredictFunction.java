@@ -69,7 +69,7 @@ public class RestRiskPredictFunction extends RichMapFunction<FeatureVector, Risk
             modelVersion
         );
 
-        return new RiskPrediction(
+        RiskPrediction prediction = new RiskPrediction(
             predictionId,
             fv.getMachineId(),
             fv.getWindowStart(),
@@ -83,6 +83,27 @@ public class RestRiskPredictFunction extends RichMapFunction<FeatureVector, Risk
             modelVersion,
             System.currentTimeMillis()
         );
+        copyFeatures(fv, prediction);
+        return prediction;
+    }
+
+    private void copyFeatures(FeatureVector fv, RiskPrediction prediction) {
+        prediction.setSampleCount(fv.getSampleCount());
+        prediction.setPressureMin(fv.getPressureMin());
+        prediction.setPressureMax(fv.getPressureMax());
+        prediction.setPressureAvg(fv.getPressureAvg());
+        prediction.setPressureStd(fv.getPressureStd());
+        prediction.setPressureTrend(fv.getPressureTrend());
+        prediction.setTemperatureMin(fv.getTemperatureMin());
+        prediction.setTemperatureMax(fv.getTemperatureMax());
+        prediction.setTemperatureAvg(fv.getTemperatureAvg());
+        prediction.setTemperatureStd(fv.getTemperatureStd());
+        prediction.setTemperatureTrend(fv.getTemperatureTrend());
+        prediction.setSpeedMin(fv.getSpeedMin());
+        prediction.setSpeedMax(fv.getSpeedMax());
+        prediction.setSpeedAvg(fv.getSpeedAvg());
+        prediction.setSpeedStd(fv.getSpeedStd());
+        prediction.setSpeedTrend(fv.getSpeedTrend());
     }
 
     private String buildRequestJson(FeatureVector fv) {

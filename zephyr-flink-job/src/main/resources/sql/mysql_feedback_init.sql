@@ -1,3 +1,5 @@
+USE zephyr_watch;
+
 CREATE TABLE IF NOT EXISTS review_label_feedback (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   alert_id VARCHAR(128) NOT NULL,
@@ -6,6 +8,7 @@ CREATE TABLE IF NOT EXISTS review_label_feedback (
   review_comment VARCHAR(512),
   event_time BIGINT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_review_feedback_alert (alert_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -37,13 +40,7 @@ CREATE TABLE IF NOT EXISTS feedback_training_sample (
   review_label VARCHAR(32),
   reviewer VARCHAR(64),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_feedback_alert (alert_id)
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_feedback_alert (alert_id),
+  KEY idx_feedback_machine_window (machine_id, window_end)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-ALTER TABLE maintenance_recommendation
-ADD UNIQUE KEY uk_recommendation_dedup (
-  alert_id,
-  machine_id,
-  action,
-  similar_case_id
-);

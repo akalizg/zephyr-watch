@@ -2,7 +2,7 @@ package com.zephyr.watch.common.constants;
 
 public final class KafkaConfig {
 
-    public static final String BOOTSTRAP_SERVERS = "192.168.88.161:9092";
+    public static final String BOOTSTRAP_SERVERS = env("ZEPHYR_KAFKA_BOOTSTRAP_SERVERS", "127.0.0.1:9092");
     public static final String INPUT_TOPIC = "iot_sensor_data";
     public static final String RISK_PREDICTION_TOPIC = "risk_prediction_topic";
     public static final String ALERT_EVENT_TOPIC = "alert_event_topic";
@@ -16,6 +16,11 @@ public final class KafkaConfig {
     public static final String RISK_TRANSACTIONAL_ID_PREFIX = "zephyr-risk-tx";
 
     private KafkaConfig() {
+    }
+
+    private static String env(String name, String defaultValue) {
+        String value = System.getenv(name);
+        return value == null || value.trim().isEmpty() ? defaultValue : value.trim();
     }
 }
 

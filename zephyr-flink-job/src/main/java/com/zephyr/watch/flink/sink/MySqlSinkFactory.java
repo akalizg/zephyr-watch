@@ -20,11 +20,21 @@ public final class MySqlSinkFactory {
     public static SinkFunction<RiskPrediction> buildRiskPredictionSink() {
         String sql = "INSERT INTO device_risk_prediction "
                 + "(prediction_id, machine_id, window_start, window_end, cycle_start, cycle_end, rul, "
-                + "risk_probability, risk_label, risk_level, model_version, event_time) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                + "risk_probability, risk_label, risk_level, model_version, event_time, sample_count, "
+                + "pressure_min, pressure_max, pressure_avg, pressure_std, pressure_trend, "
+                + "temperature_min, temperature_max, temperature_avg, temperature_std, temperature_trend, "
+                + "speed_min, speed_max, speed_avg, speed_std, speed_trend) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 + "ON DUPLICATE KEY UPDATE rul=VALUES(rul), risk_probability=VALUES(risk_probability), "
                 + "risk_label=VALUES(risk_label), risk_level=VALUES(risk_level), model_version=VALUES(model_version), "
-                + "event_time=VALUES(event_time)";
+                + "event_time=VALUES(event_time), sample_count=VALUES(sample_count), "
+                + "pressure_min=VALUES(pressure_min), pressure_max=VALUES(pressure_max), "
+                + "pressure_avg=VALUES(pressure_avg), pressure_std=VALUES(pressure_std), "
+                + "pressure_trend=VALUES(pressure_trend), temperature_min=VALUES(temperature_min), "
+                + "temperature_max=VALUES(temperature_max), temperature_avg=VALUES(temperature_avg), "
+                + "temperature_std=VALUES(temperature_std), temperature_trend=VALUES(temperature_trend), "
+                + "speed_min=VALUES(speed_min), speed_max=VALUES(speed_max), speed_avg=VALUES(speed_avg), "
+                + "speed_std=VALUES(speed_std), speed_trend=VALUES(speed_trend)";
 
         return JdbcSink.sink(sql, MySqlSinkFactory::bindRiskPrediction, executionOptions(), connectionOptions());
     }
@@ -61,6 +71,22 @@ public final class MySqlSinkFactory {
         ps.setString(10, value.getRiskLevel());
         ps.setString(11, value.getModelVersion());
         ps.setLong(12, value.getEventTime());
+        ps.setObject(13, value.getSampleCount());
+        ps.setObject(14, value.getPressureMin());
+        ps.setObject(15, value.getPressureMax());
+        ps.setObject(16, value.getPressureAvg());
+        ps.setObject(17, value.getPressureStd());
+        ps.setObject(18, value.getPressureTrend());
+        ps.setObject(19, value.getTemperatureMin());
+        ps.setObject(20, value.getTemperatureMax());
+        ps.setObject(21, value.getTemperatureAvg());
+        ps.setObject(22, value.getTemperatureStd());
+        ps.setObject(23, value.getTemperatureTrend());
+        ps.setObject(24, value.getSpeedMin());
+        ps.setObject(25, value.getSpeedMax());
+        ps.setObject(26, value.getSpeedAvg());
+        ps.setObject(27, value.getSpeedStd());
+        ps.setObject(28, value.getSpeedTrend());
     }
 
     private static void bindAlertEvent(PreparedStatement ps, AlertEvent value) throws SQLException {

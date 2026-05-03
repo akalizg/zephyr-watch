@@ -19,6 +19,12 @@ if "%MODEL_VERSION%"=="" set "MODEL_VERSION=pmml-local-rul-v1"
 set "DEBUG_PRINT=%~3"
 if "%DEBUG_PRINT%"=="" set "DEBUG_PRINT=false"
 
+set "MODEL_SERVICE_URL=%~4"
+if "%MODEL_SERVICE_URL%"=="" set "MODEL_SERVICE_URL=http://localhost:5001/api/risk/score"
+
+set "PYTHON_EXE=%ROOT%zephyr-ml\.venv1\Scripts\python.exe"
+if not exist "%PYTHON_EXE%" set "PYTHON_EXE=python"
+
 echo ============================================================
 echo Zephyr-Watch one-click launcher
 echo Project: %ROOT%
@@ -26,6 +32,7 @@ echo JAVA_HOME: %JAVA_HOME%
 echo PMML:    %PMML_PATH%
 echo Model:   %MODEL_VERSION%
 echo Debug:   %DEBUG_PRINT%
+echo Risk API:%MODEL_SERVICE_URL%
 echo ============================================================
 echo.
 echo Make sure Kafka, MySQL, Redis, HDFS/Hive and other external
@@ -48,7 +55,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [1/6] Building and installing all modules...
+echo [1/7] Building and installing all modules...
 call mvn -q -DskipTests install
 if errorlevel 1 (
     echo [ERROR] Maven package failed. Fix the build errors above and retry.
@@ -57,28 +64,32 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/6] Starting Spring Boot API...
+echo [2/7] Starting Spring Boot API...
 start "Zephyr API" /D "%ROOT%" cmd /k "mvn -q -f zephyr-api/pom.xml org.springframework.boot:spring-boot-maven-plugin:2.7.18:run"
 
-echo [3/6] Starting OnlineInferenceJob...
-start "Zephyr OnlineInferenceJob" /D "%ROOT%" cmd /k "mvn -q -f zephyr-flink-job/pom.xml org.codehaus.mojo:exec-maven-plugin:3.3.0:java ^"-Dexec.mainClass=com.zephyr.watch.flink.app.OnlineInferenceJob^" ^"-Dexec.args=%PMML_PATH% %MODEL_VERSION% %DEBUG_PRINT%^""
+echo [3/7] Starting Python Risk Model Service...
+start "Zephyr Risk Model Service" /D "%ROOT%zephyr-ml" cmd /k ""%PYTHON_EXE%" serve\risk_model_service.py"
 
-echo [4/6] Starting RecommendJob...
+echo [4/7] Starting OnlineInferenceJob...
+start "Zephyr OnlineInferenceJob" /D "%ROOT%" cmd /k "mvn -q -f zephyr-flink-job/pom.xml org.codehaus.mojo:exec-maven-plugin:3.3.0:java ^"-Dexec.mainClass=com.zephyr.watch.flink.app.OnlineInferenceJob^" ^"-Dexec.args=%PMML_PATH% %MODEL_VERSION% %DEBUG_PRINT% %MODEL_SERVICE_URL%^""
+
+echo [5/7] Starting RecommendJob...
 start "Zephyr RecommendJob" /D "%ROOT%" cmd /k "mvn -q -f zephyr-flink-job/pom.xml org.codehaus.mojo:exec-maven-plugin:3.3.0:java ^"-Dexec.mainClass=com.zephyr.watch.flink.app.RecommendJob^" ^"-Dexec.args=%DEBUG_PRINT%^""
 
-echo [5/6] Starting AlertReviewJob...
+echo [6/7] Starting AlertReviewJob...
 start "Zephyr AlertReviewJob" /D "%ROOT%" cmd /k "mvn -q -f zephyr-flink-job/pom.xml org.codehaus.mojo:exec-maven-plugin:3.3.0:java ^"-Dexec.mainClass=com.zephyr.watch.flink.app.AlertReviewJob^""
 
-echo [6/6] Starting SensorDataProducer...
+echo [7/7] Starting SensorDataProducer...
 start "Zephyr SensorDataProducer" /D "%ROOT%" cmd /k "mvn -q -f zephyr-producer/pom.xml org.codehaus.mojo:exec-maven-plugin:3.3.0:java ^"-Dexec.mainClass=com.zephyr.watch.producer.SensorDataProducer^""
 
 echo.
 echo All Zephyr-Watch processes have been started in separate windows.
 echo API health check: http://localhost:8080/actuator/health
+echo Risk model health check: http://localhost:5001/api/risk/health
 echo.
 echo Optional arguments:
-echo   run-all.bat [pmmlPath] [modelVersion] [debugPrint]
+echo   run-all.bat [pmmlPath] [modelVersion] [debugPrint] [modelServiceUrl]
 echo Example:
-echo   run-all.bat zephyr-flink-job/src/main/resources/models/model.pmml pmml-local-rul-v1 true
+echo   run-all.bat zephyr-flink-job/src/main/resources/models/model.pmml risk-classifier-rest-v1 true http://localhost:5001/api/risk/score
 echo.
 pause

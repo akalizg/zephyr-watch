@@ -1470,3 +1470,111 @@ Flink 特征工程
     ↓
 Grafana 可视化
 ```
+<!-- P0_RUNBOOK_START -->
+
+# P0 当前运行说明
+
+当前在线推理已经切到“双模型推理”主链路：
+
+```text
+SensorDataProducer
+  -> Kafka
+  -> Flink 窗口特征
+  -> PMML RUL 推理
+  -> Python 风险分类模型服务 /api/risk/score
+  -> device_risk_prediction / alert_event
+```
+
+## MySQL 初始化
+
+执行：
+
+```text
+zephyr-flink-job/src/main/resources/sql/mysql_init.sql
+```
+
+该脚本会创建 `device_risk_prediction`、`alert_event`、`alert_review`、`review_label_feedback`、`feedback_training_sample`、`maintenance_recommendation`、`model_registry` 和 `webhook_config`。
+
+如果数据库之前已经执行过旧版 SQL，可以追加执行：
+
+```text
+zephyr-flink-job/src/main/resources/sql/mysql_p0_feedback_migration.sql
+```
+
+## 模型服务
+
+使用项目已有虚拟环境，不需要重新创建：
+
+```bat
+cd zephyr-ml
+.\.venv1\Scripts\python.exe train\train_baselines.py --input data\train_dataset.csv --require-all
+.\.venv1\Scripts\python.exe serve\risk_model_service.py
+```
+
+验证：
+
+```bat
+curl http://localhost:5001/api/risk/health
+```
+
+`models/threshold.json` 里的 `riskAlertThreshold` 应该和 `reports/metrics_report.json` 中最佳模型的阈值一致。
+
+## 在线推理
+
+在项目根目录运行：
+
+```bat
+run-all.bat zephyr-flink-job/src/main/resources/models/model.pmml risk-classifier-rest-v1 true
+```
+
+`run-all.bat` 会启动 Spring Boot API、Python Risk Model Service、OnlineInferenceJob、RecommendJob、AlertReviewJob 和 SensorDataProducer。默认风险评分接口是：
+
+```text
+http://localhost:5001/api/risk/score
+```
+
+## 人工审核反馈闭环
+
+人工审核消息会进入 `review_label_topic`。`AlertReviewJob` 会同时写入：
+
+```text
+review_label_feedback
+feedback_training_sample
+```
+
+其中 `feedback_training_sample` 包含训练需要的完整 18 个特征列，可以真正参与增量训练。
+
+基于反馈样本重训：
+
+```bat
+cd zephyr-ml
+.\.venv1\Scripts\python.exe train\incremental_retrain.py --api-base http://localhost:8080 --register --activate
+```
+
+## Grafana
+
+Grafana 资源位置：
+
+```text
+zephyr-dashboard/grafana/provisioning/datasources/mysql.yml
+zephyr-dashboard/grafana/provisioning/datasources/prometheus.yml
+zephyr-dashboard/grafana/dashboards/zephyr-watch-business.json
+zephyr-dashboard/grafana/dashboards/zephyr-watch-system.json
+```
+
+## 当前状态
+
+已完成：
+- Flink 调用 Python 风险分类模型服务。
+- `threshold.json` 统一控制线上 `riskLabel` 和告警触发。
+- MySQL 保存风险预测、告警、审核反馈和反馈训练样本。
+- 增量训练可以导出 `feedback_training_sample` 并合并进训练集。
+- 已补 Grafana MySQL / Prometheus datasource 和业务 / 系统 dashboard。
+- Spring Boot 已有 Webhook 配置管理接口。
+- `StorageConfig` 和 `KafkaConfig` 已支持环境变量。
+
+后续增强：
+- 分类模型 PMML / ONNX 部署。
+- Two-Tower、LightGCN、SASRec 等高级推荐模型。
+
+<!-- P0_RUNBOOK_END -->

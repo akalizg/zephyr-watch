@@ -46,6 +46,10 @@ public class AlertReviewService {
         return repository.findReviewedLabels(normalizeLimit(limit));
     }
 
+    public List<Map<String, Object>> feedbackTrainingSamples(int limit) {
+        return repository.findFeedbackTrainingSamples(normalizeLimit(limit));
+    }
+
     private void validate(AlertReviewRequest request) {
         if (request == null || !StringUtils.hasText(request.getAlertId())) {
             throw new IllegalArgumentException("alertId is required");

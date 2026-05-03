@@ -2,6 +2,7 @@ package com.zephyr.watch.flink.app;
 
 import com.alibaba.fastjson2.JSON;
 import com.zephyr.watch.common.constants.JobConfig;
+import com.zephyr.watch.common.constants.StorageConfig;
 import com.zephyr.watch.common.entity.AlertEvent;
 import com.zephyr.watch.common.entity.FeatureVector;
 import com.zephyr.watch.common.entity.RiskPrediction;
@@ -99,8 +100,8 @@ public class OnlineInferenceJob {
             .name("MySQL_Risk_Prediction_Sink");
 
         FlinkJedisPoolConfig redisConfig = new FlinkJedisPoolConfig.Builder()
-            .setHost("127.0.0.1")
-            .setPort(6379)
+            .setHost(StorageConfig.REDIS_HOST)
+            .setPort(StorageConfig.REDIS_PORT)
             .build();
         riskStream
             .addSink(new RedisSink<>(redisConfig, new RiskRedisMapper()))

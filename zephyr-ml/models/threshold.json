@@ -1,5 +1,9 @@
 {
-  "riskAlertThreshold": 0.7,
+  "riskAlertThreshold": 0.84,
   "riskCriticalThreshold": 0.9,
-  "selectedModel": "logistic_regression"
+  "rulWarningThreshold": 60.0,
+  "rulCriticalThreshold": 30.0,
+  "riskStrategy": "p1_best_pr_auc_classifier",
+  "selectedModel": "logistic_regression",
+  "minRecall": 0.75
 }

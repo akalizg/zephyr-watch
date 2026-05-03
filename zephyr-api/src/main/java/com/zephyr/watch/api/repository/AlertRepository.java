@@ -59,4 +59,23 @@ public class AlertRepository {
                 limit
         );
     }
+
+    public List<Map<String, Object>> findFeedbackTrainingSamples(int limit) {
+        return jdbcTemplate.queryForList(
+                "SELECT "
+                        + "machine_id AS machineId, window_start AS windowStart, window_end AS windowEnd, "
+                        + "sample_count AS sampleCount, cycle_start AS cycleStart, cycle_end AS cycleEnd, "
+                        + "pressure_min AS pressureMin, pressure_max AS pressureMax, pressure_avg AS pressureAvg, "
+                        + "pressure_std AS pressureStd, pressure_trend AS pressureTrend, "
+                        + "temperature_min AS temperatureMin, temperature_max AS temperatureMax, "
+                        + "temperature_avg AS temperatureAvg, temperature_std AS temperatureStd, "
+                        + "temperature_trend AS temperatureTrend, speed_min AS speedMin, speed_max AS speedMax, "
+                        + "speed_avg AS speedAvg, speed_std AS speedStd, speed_trend AS speedTrend, "
+                        + "risk_label AS riskLabel, review_label AS reviewLabel, reviewer, alert_id AS alertId "
+                        + "FROM feedback_training_sample "
+                        + "WHERE sample_count IS NOT NULL "
+                        + "ORDER BY created_at DESC LIMIT ?",
+                limit
+        );
+    }
 }
