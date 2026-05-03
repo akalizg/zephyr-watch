@@ -45,3 +45,59 @@ ROW FORMAT DELIMITED
 FIELDS TERMINATED BY ','
 STORED AS TEXTFILE
 LOCATION '/zephyr/dws/device_feature';
+
+-- ADS: risk prediction serving layer
+DROP TABLE IF EXISTS ads_risk_prediction;
+CREATE EXTERNAL TABLE ads_risk_prediction (
+    machine_id INT,
+    window_start BIGINT,
+    window_end BIGINT,
+    rul DOUBLE,
+    risk_probability DOUBLE,
+    risk_label INT,
+    risk_level STRING,
+    model_version STRING,
+    event_time BIGINT
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE
+LOCATION '/zephyr/ads/risk_prediction';
+
+-- ADS: alert event serving layer
+DROP TABLE IF EXISTS ads_alert_event;
+CREATE EXTERNAL TABLE ads_alert_event (
+    alert_id STRING,
+    machine_id INT,
+    event_time BIGINT,
+    risk_probability DOUBLE,
+    rul DOUBLE,
+    risk_level STRING,
+    alert_type STRING,
+    message STRING,
+    source STRING,
+    status STRING,
+    model_version STRING
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE
+LOCATION '/zephyr/ads/alert_event';
+
+-- ADS: maintenance recommendation serving layer
+DROP TABLE IF EXISTS ads_maintenance_recommendation;
+CREATE EXTERNAL TABLE ads_maintenance_recommendation (
+    recommendation_id STRING,
+    alert_id STRING,
+    machine_id INT,
+    action STRING,
+    spare_parts STRING,
+    work_order_priority STRING,
+    similar_case_id STRING,
+    score DOUBLE,
+    created_at STRING
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE
+LOCATION '/zephyr/ads/maintenance_recommendation';

@@ -1,7 +1,9 @@
 {
-  "modelVersion": "risk-baseline-20260503142253",
+  "modelVersion": "risk-baseline-20260503152935",
   "modelType": "P1_RiskClassification_Baselines",
+  "modelRuntime": "REST_PKL",
   "modelUri": "best_risk_model.pkl",
+  "optionalPmmlUri": "best_risk_model.pmml",
   "thresholdUri": "threshold.json",
   "featureColumnsUri": "feature_columns.json",
   "metadataUri": "model_metadata.json",

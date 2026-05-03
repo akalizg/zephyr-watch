@@ -82,6 +82,10 @@ public class OnlineInferenceJob {
             featureStream.print("FEATURE_VECTOR");
         }
 
+        featureStream
+            .addSink(MySqlSinkFactory.buildFeatureSnapshotSink())
+            .name("MySQL_Feature_Snapshot_Sink");
+
         SingleOutputStreamOperator<RiskPrediction> riskStream = featureStream
             .map(new RestRiskPredictFunction(pmmlPath, modelServiceUrl, modelVersion))
             .name("REST_Risk_Classification_Inference");

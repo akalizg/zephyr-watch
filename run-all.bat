@@ -4,6 +4,12 @@ setlocal EnableExtensions
 set "ROOT=%~dp0"
 cd /d "%ROOT%"
 
+if exist "%ROOT%.env" (
+    for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%ROOT%.env") do (
+        if not "%%A"=="" set "%%A=%%B"
+    )
+)
+
 set "PREFERRED_JAVA_HOME=C:\Users\admin\.jdks\corretto-1.8.0_462"
 if exist "%PREFERRED_JAVA_HOME%\bin\java.exe" (
     set "JAVA_HOME=%PREFERRED_JAVA_HOME%"
@@ -14,7 +20,7 @@ set "PMML_PATH=%~1"
 if "%PMML_PATH%"=="" set "PMML_PATH=zephyr-flink-job/src/main/resources/models/model.pmml"
 
 set "MODEL_VERSION=%~2"
-if "%MODEL_VERSION%"=="" set "MODEL_VERSION=pmml-local-rul-v1"
+if "%MODEL_VERSION%"=="" set "MODEL_VERSION=risk-classifier-rest-v1"
 
 set "DEBUG_PRINT=%~3"
 if "%DEBUG_PRINT%"=="" set "DEBUG_PRINT=false"

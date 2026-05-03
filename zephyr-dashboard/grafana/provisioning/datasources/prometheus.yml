@@ -4,5 +4,5 @@ datasources:
   - name: ZephyrPrometheus
     type: prometheus
     access: proxy
-    url: ${ZEPHYR_GRAFANA_PROMETHEUS_URL:http://host.docker.internal:9090}
+    url: ${ZEPHYR_GRAFANA_PROMETHEUS_URL:http://prometheus:9090}
     isDefault: false

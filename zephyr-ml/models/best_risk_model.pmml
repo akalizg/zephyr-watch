@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<PMML xmlns="http://www.dmg.org/PMML-4_4" xmlns:data="http://jpmml.org/jpmml-model/InlineTable" version="4.4">
+	<Header>
+		<Application name="SkLearn2PMML package" version="0.130.0"/>
+		<Timestamp>2026-05-03T07:29:34Z</Timestamp>
+	</Header>
+	<MiningBuildTask>
+		<Extension name="repr">PMMLPipeline(steps=[('scaler', StandardScaler()),
+       ('classifier', LogisticRegression(class_weight='balanced', max_iter=1000, random_state=42))])</Extension>
+	</MiningBuildTask>
+	<DataDictionary>
+		<DataField name="riskLabel" optype="categorical" dataType="integer">
+			<Value value="0"/>
+			<Value value="1"/>
+		</DataField>
+		<DataField name="cycleStart" optype="continuous" dataType="double"/>
+		<DataField name="cycleEnd" optype="continuous" dataType="double"/>
+		<DataField name="pressureMin" optype="continuous" dataType="double"/>
+		<DataField name="pressureMax" optype="continuous" dataType="double"/>
+		<DataField name="pressureAvg" optype="continuous" dataType="double"/>
+		<DataField name="pressureStd" optype="continuous" dataType="double"/>
+		<DataField name="pressureTrend" optype="continuous" dataType="double"/>
+		<DataField name="temperatureMin" optype="continuous" dataType="double"/>
+		<DataField name="temperatureMax" optype="continuous" dataType="double"/>
+		<DataField name="temperatureAvg" optype="continuous" dataType="double"/>
+		<DataField name="temperatureStd" optype="continuous" dataType="double"/>
+		<DataField name="temperatureTrend" optype="continuous" dataType="double"/>
+		<DataField name="speedMin" optype="continuous" dataType="double"/>
+		<DataField name="speedMax" optype="continuous" dataType="double"/>
+		<DataField name="speedAvg" optype="continuous" dataType="double"/>
+		<DataField name="speedStd" optype="continuous" dataType="double"/>
+	</DataDictionary>
+	<RegressionModel functionName="classification" algorithmName="sklearn.linear_model._logistic.LogisticRegression" normalizationMethod="logit">
+		<MiningSchema>
+			<MiningField name="riskLabel" usageType="target"/>
+			<MiningField name="cycleStart"/>
+			<MiningField name="cycleEnd"/>
+			<MiningField name="pressureMin"/>
+			<MiningField name="pressureMax"/>
+			<MiningField name="pressureAvg"/>
+			<MiningField name="pressureStd"/>
+			<MiningField name="pressureTrend"/>
+			<MiningField name="temperatureMin"/>
+			<MiningField name="temperatureMax"/>
+			<MiningField name="temperatureAvg"/>
+			<MiningField name="temperatureStd"/>
+			<MiningField name="temperatureTrend"/>
+			<MiningField name="speedMin"/>
+			<MiningField name="speedMax"/>
+			<MiningField name="speedAvg"/>
+			<MiningField name="speedStd"/>
+		</MiningSchema>
+		<Output>
+			<OutputField name="probability(0)" optype="continuous" dataType="double" feature="probability" value="0"/>
+			<OutputField name="probability(1)" optype="continuous" dataType="double" feature="probability" value="1"/>
+		</Output>
+		<LocalTransformations>
+			<DerivedField name="standardScaler(cycleStart)" optype="continuous" dataType="double">
+				<Apply function="/">
+					<Apply function="-">
+						<FieldRef field="cycleStart"/>
+						<Constant dataType="double">642.6776058209045</Constant>
+					</Apply>
+					<Constant dataType="double">0.4981092667920182</Constant>
+				</Apply>
+			</DerivedField>
+			<DerivedField name="standardScaler(cycleEnd)" optype="continuous" dataType="double">
+				<Apply function="/">
+					<Apply function="-">
+						<FieldRef field="cycleEnd"/>
+						<Constant dataType="double">1590.4890972767346</Constant>
+					</Apply>
+					<Constant dataType="double">6.085225261877313</Constant>
+				</Apply>
+			</DerivedField>
+			<DerivedField name="standardScaler(pressureMin)" optype="continuous" dataType="double">
+				<Apply function="/">
+					<Apply function="-">
+						<FieldRef field="pressureMin"/>
+						<Constant dataType="double">1408.879098484391</Constant>
+					</Apply>
+					<Constant dataType="double">8.965345042371922</Constant>
+				</Apply>
+			</DerivedField>
+			<DerivedField name="standardScaler(pressureMax)" optype="continuous" dataType="double">
+				<Apply function="-">
+					<FieldRef field="pressureMax"/>
+					<Constant dataType="double">14.620000000000005</Constant>
+				</Apply>
+			</DerivedField>
+			<DerivedField name="standardScaler(pressureAvg)" optype="continuous" dataType="double">
+				<Apply function="/">
+					<Apply function="-">
+						<FieldRef field="pressureAvg"/>
+						<Constant dataType="double">21.609810397922836</Constant>
+					</Apply>
+					<Constant dataType="double">0.0013638445014094883</Constant>
+				</Apply>
+			</DerivedField>
+			<DerivedField name="standardScaler(pressureStd)" optype="continuous" dataType="double">
+				<Apply function="/">
+					<Apply function="-">
+						<FieldRef field="pressureStd"/>
+						<Constant dataType="double">553.3730523519112</Constant>
+					</Apply>
+					<Constant dataType="double">0.8777454226412287</Constant>
+				</Apply>
+			</DerivedField>
+			<DerivedField name="standardScaler(pressureTrend)" optype="continuous" dataType="double">
+				<Apply function="/">
+					<Apply function="-">
+						<FieldRef field="pressureTrend"/>
+						<Constant dataType="double">2388.0962586800315</Constant>
+					</Apply>
+					<Constant dataType="double">0.07064497424024783</Constant>
+				</Apply>
+			</DerivedField>
+			<DerivedField name="standardScaler(temperatureMin)" optype="continuous" dataType="double">
+				<Apply function="/">
+					<Apply function="-">
+						<FieldRef field="temperatureMin"/>
+						<Constant dataType="double">9065.39918241652</Constant>
+					</Apply>
+					<Constant dataType="double">22.659117194571188</Constant>
+				</Apply>
+			</DerivedField>
+			<DerivedField name="standardScaler(temperatureMax)" optype="continuous" dataType="double">
+				<Apply function="-">
+					<FieldRef field="temperatureMax"/>
+					<Constant dataType="double">1.3000000000000003</Constant>
+				</Apply>
+			</DerivedField>
+			<DerivedField name="standardScaler(temperatureAvg)" optype="continuous" dataType="double">
+				<Apply function="/">
+					<Apply function="-">
+						<FieldRef field="temperatureAvg"/>
+						<Constant dataType="double">47.539670913592175</Constant>
+					</Apply>
+					<Constant dataType="double">0.26572538770796555</Constant>
+				</Apply>
+			</DerivedField>
+			<DerivedField name="standardScaler(temperatureStd)" optype="continuous" dataType="double">
+				<Apply function="/">
+					<Apply function="-">
+						<FieldRef field="temperatureStd"/>
+						<Constant dataType="double">521.4170762635106</Constant>
+					</Apply>
+					<Constant dataType="double">0.7349679515339211</Constant>
+				</Apply>
+			</DerivedField>
+			<DerivedField name="standardScaler(temperatureTrend)" optype="continuous" dataType="double">
+				<Apply function="/">
+					<Apply function="-">
+						<FieldRef field="temperatureTrend"/>
+						<Constant dataType="double">2388.0958637763415</Constant>
+					</Apply>
+					<Constant dataType="double">0.07170647986645737</Constant>
+				</Apply>
+			</DerivedField>
+			<DerivedField name="standardScaler(speedMin)" optype="continuous" dataType="double">
+				<Apply function="/">
+					<Apply function="-">
+						<FieldRef field="speedMin"/>
+						<Constant dataType="double">8143.908227160196</Constant>
+					</Apply>
+					<Constant dataType="double">19.586490804857164</Constant>
+				</Apply>
+			</DerivedField>
+			<DerivedField name="standardScaler(speedMax)" optype="continuous" dataType="double">
+				<Apply function="/">
+					<Apply function="-">
+						<FieldRef field="speedMax"/>
+						<Constant dataType="double">8.442025336634263</Constant>
+					</Apply>
+					<Constant dataType="double">0.03750697070147779</Constant>
+				</Apply>
+			</DerivedField>
+			<DerivedField name="standardScaler(speedAvg)" optype="continuous" dataType="double">
+				<Apply function="-">
+					<FieldRef field="speedAvg"/>
+					<Constant dataType="double">0.03000000000000001</Constant>
+				</Apply>
+			</DerivedField>
+			<DerivedField name="standardScaler(speedStd)" optype="continuous" dataType="double">
+				<Apply function="/">
+					<Apply function="-">
+						<FieldRef field="speedStd"/>
+						<Constant dataType="double">393.20536199504863</Constant>
+					</Apply>
+					<Constant dataType="double">1.5462705034856816</Constant>
+				</Apply>
+			</DerivedField>
+		</LocalTransformations>
+		<RegressionTable intercept="-4.172998931010517" targetCategory="1">
+			<NumericPredictor name="standardScaler(cycleStart)" coefficient="0.33550567267835935"/>
+			<NumericPredictor name="standardScaler(cycleEnd)" coefficient="0.16978073971900268"/>
+			<NumericPredictor name="standardScaler(pressureMin)" coefficient="0.536550314580641"/>
+			<NumericPredictor name="standardScaler(pressureMax)" coefficient="2.003207502342321E-14"/>
+			<NumericPredictor name="standardScaler(pressureAvg)" coefficient="0.09515948052736889"/>
+			<NumericPredictor name="standardScaler(pressureStd)" coefficient="-0.5360273430687578"/>
+			<NumericPredictor name="standardScaler(pressureTrend)" coefficient="0.7281959577243706"/>
+			<NumericPredictor name="standardScaler(temperatureMin)" coefficient="0.8043169951796788"/>
+			<NumericPredictor name="standardScaler(temperatureMax)" coefficient="8.346697926426331E-16"/>
+			<NumericPredictor name="standardScaler(temperatureAvg)" coefficient="0.9780542155476044"/>
+			<NumericPredictor name="standardScaler(temperatureStd)" coefficient="-0.7077424139987796"/>
+			<NumericPredictor name="standardScaler(temperatureTrend)" coefficient="0.8368383277931707"/>
+			<NumericPredictor name="standardScaler(speedMin)" coefficient="0.6384604572080216"/>
+			<NumericPredictor name="standardScaler(speedMax)" coefficient="0.39385588822101"/>
+			<NumericPredictor name="standardScaler(speedAvg)" coefficient="3.912514653012346E-17"/>
+			<NumericPredictor name="standardScaler(speedStd)" coefficient="0.21485288283296147"/>
+		</RegressionTable>
+		<RegressionTable intercept="0.0" targetCategory="0"/>
+	</RegressionModel>
+</PMML>

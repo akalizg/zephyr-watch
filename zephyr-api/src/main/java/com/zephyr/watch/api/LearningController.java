@@ -27,4 +27,9 @@ public class LearningController {
     public Map<String, Object> feedbackTrainingSamples(@RequestParam(defaultValue = "500") int limit) {
         return ApiResponse.ok("feedback-training-sample-export", alertReviewService.feedbackTrainingSamples(limit));
     }
+
+    @GetMapping("/feedback-samples")
+    public Map<String, Object> feedbackSamples(@RequestParam(defaultValue = "500") int limit) {
+        return ApiResponse.ok("feedback-sample-export", alertReviewService.feedbackTrainingSamples(limit));
+    }
 }

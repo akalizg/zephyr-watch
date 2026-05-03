@@ -35,7 +35,7 @@ def export_review_labels(api_base: str, output_path: str, limit: int) -> int:
 
 def export_feedback_training_samples(api_base: str, output_path: str, limit: int) -> int:
     response = requests.get(
-        api_base.rstrip("/") + "/api/learning/feedback-training-samples",
+        api_base.rstrip("/") + "/api/learning/feedback-samples",
         params={"limit": limit},
         timeout=10,
     )
@@ -83,6 +83,7 @@ def normalize_feedback(input_path: str, output_path: str) -> int:
         "speed_avg": "speedAvg",
         "speed_std": "speedStd",
         "speed_trend": "speedTrend",
+        "RUL": "rul",
         "risk_label": "riskLabel",
         "review_label": "reviewLabel",
     }
@@ -90,7 +91,7 @@ def normalize_feedback(input_path: str, output_path: str) -> int:
 
     if "riskLabel" not in feedback_df.columns and "reviewLabel" in feedback_df.columns:
         feedback_df["riskLabel"] = feedback_df["reviewLabel"].map(
-            {"TRUE_POSITIVE": 1, "FALSE_POSITIVE": 0, "HIGH_RISK": 1, "LOW_RISK": 0}
+            {"TRUE_POSITIVE": 1, "CONFIRMED_RISK": 1, "FALSE_POSITIVE": 0, "NORMAL": 0, "HIGH_RISK": 1, "LOW_RISK": 0}
         )
     feedback_df = feedback_df.dropna(subset=["riskLabel"])
     feedback_df["riskLabel"] = feedback_df["riskLabel"].astype(int)

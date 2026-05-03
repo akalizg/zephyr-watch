@@ -71,7 +71,7 @@ public class AlertRepository {
                         + "temperature_avg AS temperatureAvg, temperature_std AS temperatureStd, "
                         + "temperature_trend AS temperatureTrend, speed_min AS speedMin, speed_max AS speedMax, "
                         + "speed_avg AS speedAvg, speed_std AS speedStd, speed_trend AS speedTrend, "
-                        + "risk_label AS riskLabel, review_label AS reviewLabel, reviewer, alert_id AS alertId "
+                        + "rul, risk_label AS riskLabel, review_label AS reviewLabel, reviewer, alert_id AS alertId "
                         + "FROM feedback_training_sample "
                         + "WHERE sample_count IS NOT NULL "
                         + "ORDER BY created_at DESC LIMIT ?",

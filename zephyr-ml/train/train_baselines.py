@@ -308,6 +308,28 @@ def maybe_plot_shap(model: Any, x_sample: pd.DataFrame, output_path: str) -> boo
         return False
 
 
+def maybe_export_pmml(model_name: str, model: Any, x_train: pd.DataFrame, y_train: pd.Series,
+                      output_path: str) -> Optional[str]:
+    if model_name not in {"logistic_regression", "random_forest"}:
+        return None
+    sklearn2pmml = optional_import("sklearn2pmml", "sklearn2pmml")
+    PMMLPipeline = optional_import("sklearn2pmml.pipeline", "PMMLPipeline")
+    if sklearn2pmml is None or PMMLPipeline is None:
+        return None
+
+    try:
+        if hasattr(model, "steps"):
+            pmml_pipeline = PMMLPipeline(model.steps)
+        else:
+            pmml_pipeline = PMMLPipeline([("classifier", model)])
+        pmml_pipeline.fit(x_train, y_train)
+        sklearn2pmml(pmml_pipeline, output_path, with_repr=True)
+        return output_path
+    except Exception as exc:
+        print("[WARN] PMML export skipped for %s: %s" % (model_name, exc))
+        return None
+
+
 def write_json(path: str, payload: Dict[str, Any]) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
@@ -361,6 +383,13 @@ def main() -> None:
     best_model = trained_models[best["model"]]
     best_model_path = os.path.join(args.artifact_dir, "best_risk_model.pkl")
     joblib.dump(best_model, best_model_path)
+    optional_pmml_path = maybe_export_pmml(
+        best["model"],
+        best_model,
+        x_train,
+        y_train,
+        os.path.join(args.artifact_dir, "best_risk_model.pmml"),
+    )
 
     threshold_payload = {
         "riskAlertThreshold": best["threshold"]["threshold"],
@@ -389,7 +418,9 @@ def main() -> None:
     model_metadata = {
         "modelVersion": "risk-baseline-%s" % datetime.now().strftime("%Y%m%d%H%M%S"),
         "modelType": "P1_RiskClassification_Baselines",
+        "modelRuntime": "REST_PKL",
         "modelUri": "best_risk_model.pkl",
+        "optionalPmmlUri": "best_risk_model.pmml" if optional_pmml_path else None,
         "thresholdUri": "threshold.json",
         "featureColumnsUri": "feature_columns.json",
         "metadataUri": "model_metadata.json",

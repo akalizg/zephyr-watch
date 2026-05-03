@@ -64,16 +64,17 @@ public class AlertReviewJob {
                     "(alert_id, machine_id, window_start, window_end, sample_count, cycle_start, cycle_end, " +
                     "pressure_min, pressure_max, pressure_avg, pressure_std, pressure_trend, " +
                     "temperature_min, temperature_max, temperature_avg, temperature_std, temperature_trend, " +
-                    "speed_min, speed_max, speed_avg, speed_std, speed_trend, risk_label, review_label, reviewer) " +
-                    "SELECT ?, drp.machine_id, drp.window_start, drp.window_end, drp.sample_count, " +
-                    "drp.cycle_start, drp.cycle_end, drp.pressure_min, drp.pressure_max, drp.pressure_avg, " +
-                    "drp.pressure_std, drp.pressure_trend, drp.temperature_min, drp.temperature_max, " +
-                    "drp.temperature_avg, drp.temperature_std, drp.temperature_trend, drp.speed_min, " +
-                    "drp.speed_max, drp.speed_avg, drp.speed_std, drp.speed_trend, ?, ?, ? " +
+                    "speed_min, speed_max, speed_avg, speed_std, speed_trend, rul, risk_label, review_label, reviewer) " +
+                    "SELECT ?, fs.machine_id, fs.window_start, fs.window_end, fs.sample_count, " +
+                    "fs.cycle_start, fs.cycle_end, fs.pressure_min, fs.pressure_max, fs.pressure_avg, " +
+                    "fs.pressure_std, fs.pressure_trend, fs.temperature_min, fs.temperature_max, " +
+                    "fs.temperature_avg, fs.temperature_std, fs.temperature_trend, fs.speed_min, " +
+                    "fs.speed_max, fs.speed_avg, fs.speed_std, fs.speed_trend, drp.rul, ?, ?, ? " +
                     "FROM alert_event ae " +
-                    "JOIN device_risk_prediction drp ON drp.machine_id = ae.machine_id AND drp.window_end = ae.event_time " +
+                    "JOIN online_feature_snapshot fs ON fs.machine_id = ae.machine_id " +
+                    "LEFT JOIN device_risk_prediction drp ON drp.machine_id = ae.machine_id AND drp.window_end = fs.window_end " +
                     "WHERE ae.alert_id = ? " +
-                    "ORDER BY drp.event_time DESC LIMIT 1 " +
+                    "ORDER BY ABS(ae.event_time - fs.window_end) ASC LIMIT 1 " +
                     "ON DUPLICATE KEY UPDATE " +
                     "machine_id = VALUES(machine_id), window_start = VALUES(window_start), window_end = VALUES(window_end), " +
                     "sample_count = VALUES(sample_count), cycle_start = VALUES(cycle_start), cycle_end = VALUES(cycle_end), " +
@@ -83,7 +84,7 @@ public class AlertReviewJob {
                     "temperature_avg = VALUES(temperature_avg), temperature_std = VALUES(temperature_std), " +
                     "temperature_trend = VALUES(temperature_trend), speed_min = VALUES(speed_min), speed_max = VALUES(speed_max), " +
                     "speed_avg = VALUES(speed_avg), speed_std = VALUES(speed_std), speed_trend = VALUES(speed_trend), " +
-                    "risk_label = VALUES(risk_label), review_label = VALUES(review_label), reviewer = VALUES(reviewer)"
+                    "rul = VALUES(rul), risk_label = VALUES(risk_label), review_label = VALUES(review_label), reviewer = VALUES(reviewer)"
             );
         }
 
@@ -118,7 +119,13 @@ public class AlertReviewJob {
             if ("TRUE_POSITIVE".equalsIgnoreCase(reviewLabel)) {
                 return 1;
             }
+            if ("CONFIRMED_RISK".equalsIgnoreCase(reviewLabel)) {
+                return 1;
+            }
             if ("FALSE_POSITIVE".equalsIgnoreCase(reviewLabel)) {
+                return 0;
+            }
+            if ("NORMAL".equalsIgnoreCase(reviewLabel)) {
                 return 0;
             }
             if ("1".equals(reviewLabel) || "HIGH_RISK".equalsIgnoreCase(reviewLabel)) {

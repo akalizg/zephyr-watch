@@ -64,6 +64,34 @@ CREATE TABLE IF NOT EXISTS alert_review (
     KEY idx_alert_review_alert (alert_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS online_feature_snapshot (
+    feature_id VARCHAR(128) NOT NULL PRIMARY KEY,
+    machine_id INT NOT NULL,
+    window_start BIGINT NOT NULL,
+    window_end BIGINT NOT NULL,
+    sample_count INT,
+    cycle_start INT,
+    cycle_end INT,
+    pressure_min DOUBLE,
+    pressure_max DOUBLE,
+    pressure_avg DOUBLE,
+    pressure_std DOUBLE,
+    pressure_trend DOUBLE,
+    temperature_min DOUBLE,
+    temperature_max DOUBLE,
+    temperature_avg DOUBLE,
+    temperature_std DOUBLE,
+    temperature_trend DOUBLE,
+    speed_min DOUBLE,
+    speed_max DOUBLE,
+    speed_avg DOUBLE,
+    speed_std DOUBLE,
+    speed_trend DOUBLE,
+    event_time BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_feature_machine_time (machine_id, window_end)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS maintenance_recommendation (
     recommendation_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     alert_id VARCHAR(128) NOT NULL,
@@ -115,6 +143,7 @@ CREATE TABLE IF NOT EXISTS feedback_training_sample (
     speed_avg DOUBLE,
     speed_std DOUBLE,
     speed_trend DOUBLE,
+    rul DOUBLE,
     risk_label TINYINT NOT NULL,
     review_label VARCHAR(32),
     reviewer VARCHAR(64),
@@ -131,15 +160,19 @@ CREATE TABLE IF NOT EXISTS model_registry (
     threshold_uri VARCHAR(512),
     feature_columns_uri VARCHAR(512),
     metadata_uri VARCHAR(512),
+    optional_pmml_uri VARCHAR(512),
     status VARCHAR(32) NOT NULL,
     deployed_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS webhook_config (
-    channel VARCHAR(64) NOT NULL PRIMARY KEY,
+    webhook_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(128) NOT NULL,
+    webhook_type VARCHAR(32) NOT NULL,
     webhook_url VARCHAR(1024) NOT NULL,
-    enabled TINYINT NOT NULL DEFAULT 1,
+    min_risk_level VARCHAR(32) DEFAULT 'HIGH',
+    enabled TINYINT DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -9,7 +9,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class WebhookConfigRequest {
 
-    private String channel;
+    private Long webhookId;
+    private String name;
+    private String webhookType;
     private String webhookUrl;
+    private String minRiskLevel;
     private Boolean enabled;
 }

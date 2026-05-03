@@ -69,6 +69,14 @@ def build_registry_payload() -> Dict:
         metadata_path,
         base_object_path + "/model_metadata.json",
     )
+    pmml_path = os.path.join(MODEL_DIR, "best_risk_model.pmml")
+    optional_pmml_uri = None
+    if os.path.exists(pmml_path):
+        optional_pmml_uri = upload_to_minio(
+            client,
+            pmml_path,
+            base_object_path + "/best_risk_model.pmml",
+        )
 
     return {
         "modelVersion": model_version,
@@ -77,6 +85,7 @@ def build_registry_payload() -> Dict:
         "thresholdUri": threshold_uri,
         "featureColumnsUri": feature_columns_uri,
         "metadataUri": metadata_uri,
+        "optionalPmmlUri": optional_pmml_uri,
         "status": "READY",
     }
 

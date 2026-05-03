@@ -15,5 +15,6 @@ public class ModelRegistryRequest {
     private String thresholdUri;
     private String featureColumnsUri;
     private String metadataUri;
+    private String optionalPmmlUri;
     private String status;
 }

@@ -41,11 +41,11 @@ public class ModelRegistryRepository {
     public int upsert(ModelRegistryRequest request) {
         return jdbcTemplate.update(
                 "INSERT INTO model_registry "
-                        + "(model_version, model_type, model_uri, threshold_uri, feature_columns_uri, metadata_uri, status, deployed_at) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'ACTIVE' THEN CURRENT_TIMESTAMP ELSE NULL END) "
+                        + "(model_version, model_type, model_uri, threshold_uri, feature_columns_uri, metadata_uri, optional_pmml_uri, status, deployed_at) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'ACTIVE' THEN CURRENT_TIMESTAMP ELSE NULL END) "
                         + "ON DUPLICATE KEY UPDATE model_type=VALUES(model_type), model_uri=VALUES(model_uri), "
                         + "threshold_uri=VALUES(threshold_uri), feature_columns_uri=VALUES(feature_columns_uri), "
-                        + "metadata_uri=VALUES(metadata_uri), status=VALUES(status), "
+                        + "metadata_uri=VALUES(metadata_uri), optional_pmml_uri=VALUES(optional_pmml_uri), status=VALUES(status), "
                         + "deployed_at=CASE WHEN VALUES(status) = 'ACTIVE' THEN CURRENT_TIMESTAMP ELSE deployed_at END",
                 request.getModelVersion(),
                 request.getModelType(),
@@ -53,6 +53,7 @@ public class ModelRegistryRepository {
                 request.getThresholdUri(),
                 request.getFeatureColumnsUri(),
                 request.getMetadataUri(),
+                request.getOptionalPmmlUri(),
                 request.getStatus(),
                 request.getStatus()
         );

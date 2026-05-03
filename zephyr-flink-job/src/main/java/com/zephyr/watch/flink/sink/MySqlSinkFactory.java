@@ -2,6 +2,7 @@ package com.zephyr.watch.flink.sink;
 
 import com.zephyr.watch.common.constants.StorageConfig;
 import com.zephyr.watch.common.entity.AlertEvent;
+import com.zephyr.watch.common.entity.FeatureVector;
 import com.zephyr.watch.common.entity.MaintenanceRecommendation;
 import com.zephyr.watch.common.entity.RiskPrediction;
 import org.apache.flink.connector.jdbc.JdbcConnectionOptions;
@@ -50,10 +51,31 @@ public final class MySqlSinkFactory {
         return JdbcSink.sink(sql, MySqlSinkFactory::bindAlertEvent, executionOptions(), connectionOptions());
     }
 
+    public static SinkFunction<FeatureVector> buildFeatureSnapshotSink() {
+        String sql = "INSERT INTO online_feature_snapshot "
+                + "(feature_id, machine_id, window_start, window_end, sample_count, cycle_start, cycle_end, "
+                + "pressure_min, pressure_max, pressure_avg, pressure_std, pressure_trend, "
+                + "temperature_min, temperature_max, temperature_avg, temperature_std, temperature_trend, "
+                + "speed_min, speed_max, speed_avg, speed_std, speed_trend, event_time) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                + "ON DUPLICATE KEY UPDATE sample_count=VALUES(sample_count), cycle_start=VALUES(cycle_start), "
+                + "cycle_end=VALUES(cycle_end), pressure_min=VALUES(pressure_min), pressure_max=VALUES(pressure_max), "
+                + "pressure_avg=VALUES(pressure_avg), pressure_std=VALUES(pressure_std), "
+                + "pressure_trend=VALUES(pressure_trend), temperature_min=VALUES(temperature_min), "
+                + "temperature_max=VALUES(temperature_max), temperature_avg=VALUES(temperature_avg), "
+                + "temperature_std=VALUES(temperature_std), temperature_trend=VALUES(temperature_trend), "
+                + "speed_min=VALUES(speed_min), speed_max=VALUES(speed_max), speed_avg=VALUES(speed_avg), "
+                + "speed_std=VALUES(speed_std), speed_trend=VALUES(speed_trend), event_time=VALUES(event_time)";
+
+        return JdbcSink.sink(sql, MySqlSinkFactory::bindFeatureSnapshot, executionOptions(), connectionOptions());
+    }
+
     public static SinkFunction<MaintenanceRecommendation> buildRecommendationSink() {
         String sql = "INSERT INTO maintenance_recommendation "
                 + "(alert_id, machine_id, action, spare_parts, work_order_priority, similar_case_id, score) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?)";
+                + "VALUES (?, ?, ?, ?, ?, ?, ?) "
+                + "ON DUPLICATE KEY UPDATE spare_parts=VALUES(spare_parts), "
+                + "work_order_priority=VALUES(work_order_priority), score=VALUES(score)";
 
         return JdbcSink.sink(sql, MySqlSinkFactory::bindRecommendation, executionOptions(), connectionOptions());
     }
@@ -101,6 +123,32 @@ public final class MySqlSinkFactory {
         ps.setString(9, value.getSource());
         ps.setString(10, value.getStatus());
         ps.setString(11, value.getModelVersion());
+    }
+
+    private static void bindFeatureSnapshot(PreparedStatement ps, FeatureVector value) throws SQLException {
+        ps.setString(1, value.getMachineId() + "-" + value.getWindowEnd());
+        ps.setInt(2, value.getMachineId());
+        ps.setLong(3, value.getWindowStart());
+        ps.setLong(4, value.getWindowEnd());
+        ps.setObject(5, value.getSampleCount());
+        ps.setObject(6, value.getCycleStart());
+        ps.setObject(7, value.getCycleEnd());
+        ps.setObject(8, value.getPressureMin());
+        ps.setObject(9, value.getPressureMax());
+        ps.setObject(10, value.getPressureAvg());
+        ps.setObject(11, value.getPressureStd());
+        ps.setObject(12, value.getPressureTrend());
+        ps.setObject(13, value.getTemperatureMin());
+        ps.setObject(14, value.getTemperatureMax());
+        ps.setObject(15, value.getTemperatureAvg());
+        ps.setObject(16, value.getTemperatureStd());
+        ps.setObject(17, value.getTemperatureTrend());
+        ps.setObject(18, value.getSpeedMin());
+        ps.setObject(19, value.getSpeedMax());
+        ps.setObject(20, value.getSpeedAvg());
+        ps.setObject(21, value.getSpeedStd());
+        ps.setObject(22, value.getSpeedTrend());
+        ps.setLong(23, System.currentTimeMillis());
     }
 
     private static void bindRecommendation(PreparedStatement ps, MaintenanceRecommendation value) throws SQLException {

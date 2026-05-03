@@ -1,4 +1,4 @@
-# Zephyr-Watch：基于 Flink 与机器学习的工业设备实时预警与智能维护推荐平台
+﻿# Zephyr-Watch：基于 Flink 与机器学习的工业设备实时预警与智能维护推荐平台
 Zephyr-Watch 是一套面向工业设备预测性维护场景的实时智能预警平台。项目基于 NASA C-MAPSS 涡扇发动机数据集，构建从传感器数据接入、Flink 实时特征工程、HDFS/Hive 离线特征仓库、Python 机器学习建模、Flink 在线推理、异常告警、Grafana 可视化到智能维护推荐的完整闭环。
 
 本项目不再局限于单一 RUL 剩余寿命预测，而是进一步扩展为：
@@ -114,7 +114,7 @@ beeline -u jdbc:hive2://localhost:10000 -n root
 
 ### 3. Hive 映射表创建 (虚拟机端)
 -打开虚拟机的beeline，执行以下 SQL 创建外部表：
--[hive_init.sql](src/main/resources/sql/hive_init.sql)
+-[hive_init.sql](zephyr-flink-job/src/main/resources/sql/hive_init.sql)
 
 ## 🐍 五、 🛠 已完成的核心功能
 目前项目已经搭建起从数据仿真到实时推理的完整闭环：
@@ -493,7 +493,7 @@ Grafana 可视化展示
 
 | Topic | 作用 |
 |---|---|
-| `sensor_raw_topic` | 原始传感器数据 |
+| `iot_sensor_data` | 原始传感器数据 |
 | `risk_prediction_topic` | 风险预测结果 |
 | `alert_event_topic` | 高风险告警事件 |
 | `review_label_topic` | 人工审核标签回流 |
@@ -644,7 +644,7 @@ CREATE TABLE device_risk_prediction (
     risk_level VARCHAR(20),
     model_name VARCHAR(100),
     threshold_value DOUBLE,
-    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -657,10 +657,10 @@ CREATE TABLE alert_event (
     alert_type VARCHAR(50),
     risk_probability DOUBLE,
     risk_level VARCHAR(20),
-    alert_reason VARCHAR(500),
+    message VARCHAR(500),
     source VARCHAR(50),
     status VARCHAR(20) DEFAULT 'PENDING',
-    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -685,11 +685,11 @@ CREATE TABLE maintenance_recommendation (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     machine_id INT NOT NULL,
     alert_id BIGINT,
-    recommend_type VARCHAR(50),
-    recommend_name VARCHAR(200),
+    action VARCHAR(50),
+    spare_parts VARCHAR(200),
     recommend_reason VARCHAR(500),
     score DOUBLE,
-    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -968,25 +968,25 @@ Grafana 不仅展示业务结果，还展示系统运行状态。
 
 ```sql
 SELECT
-  create_time AS time,
+  created_at AS time,
   risk_probability,
   machine_id AS metric
 FROM device_risk_prediction
-WHERE $__timeFilter(create_time);
+WHERE $__timeFilter(created_at);
 ```
 
 ### 高风险告警列表
 
 ```sql
 SELECT
-  create_time AS time,
+  created_at AS time,
   machine_id,
   risk_probability,
   risk_level,
-  alert_reason
+  message
 FROM alert_event
 WHERE risk_level IN ('HIGH', 'CRITICAL')
-ORDER BY create_time DESC
+ORDER BY created_at DESC
 LIMIT 50;
 ```
 
@@ -994,10 +994,10 @@ LIMIT 50;
 
 ```sql
 SELECT
-  $__timeGroup(create_time, '1h') AS time,
+  $__timeGroup(created_at, '1h') AS time,
   COUNT(*) AS alert_count
 FROM alert_event
-WHERE $__timeFilter(create_time)
+WHERE $__timeFilter(created_at)
 GROUP BY time
 ORDER BY time;
 ```
@@ -1006,14 +1006,14 @@ ORDER BY time;
 
 ```sql
 SELECT
-  create_time AS time,
+  created_at AS time,
   machine_id,
-  recommend_type,
-  recommend_name,
+  action,
+  spare_parts,
   score,
   recommend_reason
 FROM maintenance_recommendation
-ORDER BY create_time DESC
+ORDER BY created_at DESC
 LIMIT 20;
 ```
 
@@ -1071,13 +1071,13 @@ run-all.bat
 可选参数：
 
 ```bat
-run-all.bat [pmmlPath] [modelVersion] [debugPrint]
+run-all.bat [pmmlPath] [modelVersion] [debugPrint] [modelServiceUrl]
 ```
 
 示例：
 
 ```bat
-run-all.bat zephyr-flink-job/src/main/resources/models/model.pmml pmml-local-rul-v1 true
+run-all.bat zephyr-flink-job/src/main/resources/models/model.pmml risk-classifier-rest-v1 true
 ```
 
 注意：Kafka、MySQL、Redis、HDFS/Hive 等外部基础组件仍需先按下方步骤启动。
@@ -1105,7 +1105,7 @@ Grafana
 在 Hive 中执行：
 
 ```text
-src/main/resources/sql/hive_init.sql
+zephyr-flink-job/src/main/resources/sql/hive_init.sql
 ```
 
 用于创建：
@@ -1122,7 +1122,7 @@ dws_device_feature
 在 MySQL 中执行：
 
 ```text
-src/main/resources/sql/mysql_init.sql
+zephyr-flink-job/src/main/resources/sql/mysql_init.sql
 ```
 
 用于创建：
@@ -1142,7 +1142,7 @@ model_registry
 运行：
 
 ```text
-OfflineFeatureJob
+OfflineWarehouseJob
 ```
 
 任务作用：
@@ -1303,41 +1303,37 @@ Kafka 消息堆积
 
 ---
 
-## 十二、当前已完成与待补充功能
+## 当前完成状态
 
-## 1. 已完成基础能力
+### 已完成
+- 多模块 Maven 工程
+- Kafka 数据接入
+- Flink 实时清洗、窗口特征、状态后端、Checkpoint
+- REST 风险模型服务
+- PMML RUL 辅助推理
+- MySQL / Redis / Kafka 风险结果输出
+- 阈值告警和 CEP 连续高风险告警
+- 告警事件写 MySQL / Kafka / Webhook Sink
+- Spring Boot 风险查询、告警审核、推荐查询、模型注册接口
+- P1 风险分类训练脚本
+- MinIO 模型上传注册脚本
+- 推荐系统 v0：规则 + 相似案例
+- Grafana MySQL 业务 Dashboard
 
-当前项目已经具备以下基础：
+### 进行中
+- 一键启动模型服务
+- 审核反馈转训练样本
+- Prometheus 系统监控
+- Webhook 配置管理
+- 分类模型 PMML/ONNX 导出
+- Hive ADS 层
 
-| 功能 | 状态 |
-|---|---|
-| Kafka 数据接入 | 已有基础 |
-| Flink 流式处理 | 已有基础 |
-| 传感器数据清洗 | 已有基础 |
-| 窗口特征工程 | 已有基础 |
-| HDFS 特征存储 | 已有基础 |
-| Hive 外部表映射 | 已有基础 |
-| Python 读取 Hive | 已有基础 |
-| Random Forest RUL 训练 | 已有基础 |
-| PMML 在线推理 | 已有基础 |
-| Redis 写入预测结果 | 已有基础 |
-
----
-
-## 2. 必须补充能力
-
-后续必须补齐：
-
-| 模块 | 待实现内容 |
-|---|---|
-| Flink | 基于 1.15.2 完善滑动窗口、状态后端、Exactly-Once、CEP、Side Output |
-| 机器学习 | 4 种基线模型、PR-AUC、阈值优化、模型融合、SHAP、无监督异常检测 |
-| 模型部署 | PMML/ONNX、MinIO 模型仓库、模型版本管理 |
-| 输出告警 | MySQL Sink、Kafka Alert Topic、企业微信/钉钉 Webhook |
-| 在线学习 | 人工审核标签回流、周期性再训练 |
-| 推荐系统 | 相似案例推荐、Two-Tower、LightGCN、维修策略推荐 |
-| 可视化 | Prometheus + Grafana 业务监控和系统监控 |
-| API | Flask 风险评分接口 |
+### 后续扩展
+- Two-Tower
+- LightGCN
+- SASRec / BERT4Rec
+- CatBoost / MLP / 无监督异常检测
+- Flink Async I/O 推理优化
 
 ---
 
@@ -1501,6 +1497,34 @@ zephyr-flink-job/src/main/resources/sql/mysql_init.sql
 zephyr-flink-job/src/main/resources/sql/mysql_p0_feedback_migration.sql
 ```
 
+## 训练模型
+
+```bat
+cd zephyr-ml
+.\.venv1\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv1\Scripts\python.exe -m pip install -r requirements-serve.txt
+.\.venv1\Scripts\python.exe train\train_baselines.py --require-all
+```
+
+## 启动模型服务
+
+```bat
+cd zephyr-ml
+.\.venv1\Scripts\python.exe serve\risk_model_service.py
+```
+
+## 上传并激活模型
+
+```bat
+cd zephyr-ml
+.\.venv1\Scripts\python.exe train\register_model.py --activate
+```
+
+## 启动全链路
+
+```bat
+run-all.bat zephyr-flink-job/src/main/resources/models/model.pmml risk-classifier-rest-v1 true
+```
 ## 模型服务
 
 使用项目已有虚拟环境，不需要重新创建：
@@ -1578,3 +1602,8 @@ zephyr-dashboard/grafana/dashboards/zephyr-watch-system.json
 - Two-Tower、LightGCN、SASRec 等高级推荐模型。
 
 <!-- P0_RUNBOOK_END -->
+
+
+
+
+
