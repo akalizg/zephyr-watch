@@ -74,7 +74,7 @@ public final class MySqlSinkFactory {
         String sql = "INSERT INTO maintenance_recommendation "
                 + "(alert_id, machine_id, action, spare_parts, work_order_priority, similar_case_id, score) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?) "
-                + "ON DUPLICATE KEY UPDATE spare_parts=VALUES(spare_parts), "
+                + "ON DUPLICATE KEY UPDATE action=VALUES(action), spare_parts=VALUES(spare_parts), "
                 + "work_order_priority=VALUES(work_order_priority), score=VALUES(score)";
 
         return JdbcSink.sink(sql, MySqlSinkFactory::bindRecommendation, executionOptions(), connectionOptions());

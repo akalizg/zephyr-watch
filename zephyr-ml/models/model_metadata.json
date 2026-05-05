@@ -1,5 +1,5 @@
 {
-  "modelVersion": "risk-baseline-20260503152935",
+  "modelVersion": "risk-baseline-20260506000114",
   "modelType": "P1_RiskClassification_Baselines",
   "modelRuntime": "REST_PKL",
   "modelUri": "best_risk_model.pkl",

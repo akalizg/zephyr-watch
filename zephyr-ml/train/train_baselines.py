@@ -335,6 +335,146 @@ def write_json(path: str, payload: Dict[str, Any]) -> None:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
 
+def flatten_metric_row(metric: Dict[str, Any]) -> Dict[str, Any]:
+    matrix = metric["confusionMatrix"]
+    return {
+        "model": metric["model"],
+        "precision": metric["precision"],
+        "recall": metric["recall"],
+        "f1": metric["f1"],
+        "pr_auc": metric["pr_auc"],
+        "roc_auc": metric.get("roc_auc"),
+        "threshold": metric["threshold"]["threshold"],
+        "tn": matrix["tn"],
+        "fp": matrix["fp"],
+        "fn": matrix["fn"],
+        "tp": matrix["tp"],
+    }
+
+
+def write_class_distribution(df: pd.DataFrame, output_path: str) -> None:
+    total = max(len(df), 1)
+    rows = []
+    for label, count in df["riskLabel"].astype(int).value_counts().sort_index().items():
+        rows.append({
+            "label": int(label),
+            "count": int(count),
+            "ratio": round(float(count) / total, 6),
+        })
+    pd.DataFrame(rows, columns=["label", "count", "ratio"]).to_csv(output_path, index=False)
+
+
+def write_threshold_compare(metrics: List[Dict[str, Any]], probabilities: Dict[str, np.ndarray],
+                            y_test: np.ndarray, sk: Dict[str, Any], output_path: str) -> None:
+    rows = []
+    for metric in metrics:
+        name = metric["model"]
+        thresholds = sorted(set([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, metric["threshold"]["threshold"]]))
+        for threshold in thresholds:
+            y_pred = (probabilities[name] >= threshold).astype(int)
+            rows.append({
+                "model": name,
+                "threshold": round(float(threshold), 4),
+                "precision": float(sk["precision_score"](y_test, y_pred, zero_division=0)),
+                "recall": float(sk["recall_score"](y_test, y_pred, zero_division=0)),
+                "f1": float(sk["f1_score"](y_test, y_pred, zero_division=0)),
+            })
+    pd.DataFrame(rows, columns=["model", "threshold", "precision", "recall", "f1"]).to_csv(output_path, index=False)
+
+
+def write_best_model_summary(best: Dict[str, Any], output_path: str) -> None:
+    content = [
+        "# Best Model Summary",
+        "",
+        "- 最优模型名称：`%s`" % best["model"],
+        "- 选择依据：按 PR-AUC 从高到低选择，PR-AUC 更适合衡量少数高风险样本的识别能力。",
+        "- PR-AUC：`%.6f`" % best["pr_auc"],
+        "- Precision：`%.6f`" % best["precision"],
+        "- Recall：`%.6f`" % best["recall"],
+        "- F1：`%.6f`" % best["f1"],
+        "- 最优阈值：`%.4f`" % best["threshold"]["threshold"],
+        "",
+        "## 为什么不主要看 Accuracy",
+        "",
+        "设备高风险样本通常占比更低，模型即使大量预测为低风险也可能得到较高 Accuracy。答辩和生产排查更关心高风险样本是否被及时召回，以及误报是否在可接受范围内，因此本报告主要看 Precision、Recall、F1 和 PR-AUC。",
+        "",
+        "## 当前模型局限",
+        "",
+        "- 当前训练仍以表格特征和传统机器学习模型为主，没有宣称完成 ONNX、TF Serving 或深度时序模型。",
+        "- 模型效果依赖训练数据分布，真实设备迁移时需要持续补充人工审核反馈样本。",
+        "- 阈值来自离线测试集，线上可结合人工审核结果继续校准。",
+    ]
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(content) + "\n")
+
+
+def maybe_write_fusion_reports(metrics: List[Dict[str, Any]], probabilities: Dict[str, np.ndarray],
+                               y_test: np.ndarray, sk: Dict[str, Any], min_recall: float,
+                               artifact_dir: str, report_dir: str) -> None:
+    if len(metrics) < 2:
+        return
+
+    positive_pr_auc_sum = sum(max(metric["pr_auc"], 0.0) for metric in metrics)
+    if positive_pr_auc_sum <= 0:
+        return
+
+    weights = {
+        metric["model"]: max(metric["pr_auc"], 0.0) / positive_pr_auc_sum
+        for metric in metrics
+    }
+    fusion_prob = np.zeros_like(next(iter(probabilities.values())), dtype=float)
+    for model_name, weight in weights.items():
+        fusion_prob += probabilities[model_name] * weight
+
+    threshold = find_best_threshold(y_test, fusion_prob, sk, min_recall)
+    y_pred = (fusion_prob >= threshold["threshold"]).astype(int)
+    tn, fp, fn, tp = sk["confusion_matrix"](y_test, y_pred, labels=[0, 1]).ravel()
+    fusion_metrics = {
+        "model": "weighted_pr_auc_fusion",
+        "weights": weights,
+        "threshold": threshold["threshold"],
+        "precision": float(sk["precision_score"](y_test, y_pred, zero_division=0)),
+        "recall": float(sk["recall_score"](y_test, y_pred, zero_division=0)),
+        "f1": float(sk["f1_score"](y_test, y_pred, zero_division=0)),
+        "pr_auc": float(sk["average_precision_score"](y_test, fusion_prob)),
+        "roc_auc": None,
+        "confusionMatrix": {
+            "tn": int(tn),
+            "fp": int(fp),
+            "fn": int(fn),
+            "tp": int(tp),
+        },
+    }
+    try:
+        fusion_metrics["roc_auc"] = float(sk["roc_auc_score"](y_test, fusion_prob))
+    except Exception:
+        fusion_metrics["roc_auc"] = None
+
+    write_json(os.path.join(artifact_dir, "fusion_metadata.json"), {
+        "fusionType": "weighted_probability_average",
+        "weightRule": "weight = model PR-AUC / sum(PR-AUC of all trained models)",
+        "models": list(weights.keys()),
+        "weights": weights,
+        "threshold": threshold["threshold"],
+        "createdAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    })
+    write_json(os.path.join(report_dir, "fusion_metrics.json"), fusion_metrics)
+
+
+def write_experiment_reports(df: pd.DataFrame, metrics: List[Dict[str, Any]],
+                             probabilities: Dict[str, np.ndarray], y_test: np.ndarray,
+                             sk: Dict[str, Any], min_recall: float,
+                             artifact_dir: str, report_dir: str) -> None:
+    model_rows = [flatten_metric_row(metric) for metric in metrics]
+    pd.DataFrame(model_rows, columns=[
+        "model", "precision", "recall", "f1", "pr_auc", "roc_auc", "threshold", "tn", "fp", "fn", "tp"
+    ]).to_csv(os.path.join(report_dir, "model_compare.csv"), index=False)
+    write_threshold_compare(metrics, probabilities, y_test, sk, os.path.join(report_dir, "threshold_compare.csv"))
+    write_best_model_summary(metrics[0], os.path.join(report_dir, "best_model_summary.md"))
+    write_class_distribution(df, os.path.join(report_dir, "class_distribution.csv"))
+    maybe_write_fusion_reports(metrics, probabilities, y_test, sk, min_recall, artifact_dir, report_dir)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train Zephyr-Watch P1 risk classification baselines.")
     parser.add_argument("--input", default=os.path.join(DATA_DIR, "train_dataset.csv"))
@@ -414,6 +554,16 @@ def main() -> None:
         "skippedModels": skipped,
     }
     write_json(os.path.join(args.report_dir, "metrics_report.json"), report_payload)
+    write_experiment_reports(
+        df,
+        metrics,
+        probabilities,
+        y_test,
+        sk,
+        args.min_recall,
+        args.artifact_dir,
+        args.report_dir,
+    )
 
     model_metadata = {
         "modelVersion": "risk-baseline-%s" % datetime.now().strftime("%Y%m%d%H%M%S"),

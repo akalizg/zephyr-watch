@@ -1,0 +1,21 @@
+{
+  "model": "weighted_pr_auc_fusion",
+  "weights": {
+    "logistic_regression": 0.25139500661610614,
+    "xgboost": 0.2499891749831789,
+    "lightgbm": 0.2494887897629443,
+    "random_forest": 0.2491270286377706
+  },
+  "threshold": 0.73,
+  "precision": 0.8926829268292683,
+  "recall": 0.885483870967742,
+  "f1": 0.8890688259109312,
+  "pr_auc": 0.960940700971001,
+  "roc_auc": 0.9915049088359046,
+  "confusionMatrix": {
+    "tn": 3384,
+    "fp": 66,
+    "fn": 71,
+    "tp": 549
+  }
+}
