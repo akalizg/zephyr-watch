@@ -28,6 +28,8 @@ if "%DEBUG_PRINT%"=="" set "DEBUG_PRINT=false"
 set "MODEL_SERVICE_URL=%~4"
 if "%MODEL_SERVICE_URL%"=="" set "MODEL_SERVICE_URL=http://localhost:5001/api/risk/score"
 
+if "%ZEPHYR_AUTO_BOOTSTRAP_MODEL%"=="" set "ZEPHYR_AUTO_BOOTSTRAP_MODEL=true"
+
 set "PYTHON_EXE=%ROOT%zephyr-ml\.venv1\Scripts\python.exe"
 if not exist "%PYTHON_EXE%" set "PYTHON_EXE=python"
 
@@ -39,6 +41,7 @@ echo PMML:    %PMML_PATH%
 echo Model:   %MODEL_VERSION%
 echo Debug:   %DEBUG_PRINT%
 echo Risk API:%MODEL_SERVICE_URL%
+echo Auto model bootstrap: %ZEPHYR_AUTO_BOOTSTRAP_MODEL%
 echo ============================================================
 echo.
 echo Make sure Kafka, MySQL, Redis, HDFS/Hive and other external
@@ -91,6 +94,9 @@ start "Zephyr SensorDataProducer" /D "%ROOT%" cmd /k "mvn -q -f zephyr-producer/
 echo.
 echo All Zephyr-Watch processes have been started in separate windows.
 echo API health check: http://localhost:8080/actuator/health
+echo Dashboard page:   http://localhost:8080/dashboard
+echo Dashboard API:    http://localhost:8080/api/dashboard/overview
+echo API docs-lite:    http://localhost:8080/api/docs-lite
 echo Risk model health check: http://localhost:5001/api/risk/health
 echo.
 echo Optional arguments:

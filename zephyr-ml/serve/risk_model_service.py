@@ -1,5 +1,7 @@
 import json
 import os
+import subprocess
+import sys
 from typing import Any, Dict, Tuple
 
 import joblib
@@ -26,6 +28,7 @@ DEFAULT_MODEL_PATH = os.path.join(MODEL_DIR, "best_risk_model.pkl")
 DEFAULT_THRESHOLD_PATH = os.path.join(MODEL_DIR, "threshold.json")
 DEFAULT_FEATURE_COLUMNS_PATH = os.path.join(MODEL_DIR, "feature_columns.json")
 DEFAULT_METADATA_PATH = os.path.join(MODEL_DIR, "model_metadata.json")
+BOOTSTRAP_MODEL_SCRIPT = os.path.join(ML_ROOT, "tools", "bootstrap_model.py")
 
 MODEL_REGISTRY_ACTIVE_URL = os.environ.get(
     "ZEPHYR_MODEL_REGISTRY_ACTIVE_URL",
@@ -143,10 +146,32 @@ def resolve_model_files() -> Dict[str, str]:
     }
 
 
+def ensure_model_file(model_path: str) -> None:
+    if os.path.exists(model_path):
+        return
+
+    if os.environ.get("ZEPHYR_AUTO_BOOTSTRAP_MODEL", "false").lower() == "true":
+        command = [sys.executable, BOOTSTRAP_MODEL_SCRIPT]
+        result = subprocess.run(command, cwd=ML_ROOT)
+        if result.returncode != 0:
+            raise RuntimeError(
+                "模型 bootstrap 失败，命令=%s，返回码=%s"
+                % (" ".join(command), result.returncode)
+            )
+        if os.path.exists(model_path):
+            return
+
+    raise RuntimeError(
+        "缺少 best_risk_model.pkl，无法启动 REST 模型服务。请运行："
+        "python zephyr-ml/tools/bootstrap_model.py"
+    )
+
+
 def load_model_state() -> None:
     global model, threshold_config, feature_config, metadata, loaded_paths
 
     loaded_paths = resolve_model_files()
+    ensure_model_file(loaded_paths["model"])
     model = joblib.load(loaded_paths["model"])
     threshold_config = read_json(
         loaded_paths["threshold"],

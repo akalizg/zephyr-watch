@@ -1,5 +1,6 @@
 package com.zephyr.watch.flink.process;
 
+import com.zephyr.watch.common.constants.JobConfig;
 import com.zephyr.watch.common.entity.AlertEvent;
 import com.zephyr.watch.common.entity.RiskPrediction;
 import java.util.ArrayList;
@@ -10,14 +11,9 @@ import org.apache.flink.util.Collector;
 
 public class FeatureAnomalyAlertFunction implements FlatMapFunction<RiskPrediction, AlertEvent> {
 
-    private static final double SPEED_STD_THRESHOLD = 5.0D;
-    private static final double PRESSURE_STD_THRESHOLD = 5.0D;
-    private static final double TEMPERATURE_AVG_THRESHOLD = 80.0D;
-    private static final double TEMPERATURE_TREND_THRESHOLD = 0.0D;
-
     @Override
     public void flatMap(RiskPrediction value, Collector<AlertEvent> out) {
-        List<String> triggeredAnomalies = new ArrayList<>();
+        List<String> triggeredAnomalies = new ArrayList<String>();
 
         if (isTemperatureRising(value)) {
             triggeredAnomalies.add("TEMPERATURE_RISING");
@@ -27,16 +23,18 @@ public class FeatureAnomalyAlertFunction implements FlatMapFunction<RiskPredicti
                 "MEDIUM",
                 String.format(
                     Locale.US,
-                    "设备 %d 出现温度持续上升风险，temperatureTrend=%.4f，temperatureAvg=%.2f，riskProbability=%.4f。",
+                    "设备 %d 出现温度持续上升风险，temperatureTrend=%.4f，trendThreshold=%.4f，temperatureAvg=%.2f，avgThreshold=%.2f，riskProbability=%.4f。",
                     value.getMachineId(),
                     defaultDouble(value.getTemperatureTrend()),
+                    JobConfig.FEATURE_ALERT_TEMPERATURE_TREND_THRESHOLD,
                     defaultDouble(value.getTemperatureAvg()),
+                    JobConfig.FEATURE_ALERT_TEMPERATURE_AVG_THRESHOLD,
                     defaultDouble(value.getRiskProbability())
                 )
             ));
         }
 
-        if (defaultDouble(value.getSpeedStd()) >= SPEED_STD_THRESHOLD) {
+        if (defaultDouble(value.getSpeedStd()) >= JobConfig.FEATURE_ALERT_SPEED_STD_THRESHOLD) {
             triggeredAnomalies.add("SPEED_FLUCTUATION");
             out.collect(buildAlert(
                 value,
@@ -44,15 +42,16 @@ public class FeatureAnomalyAlertFunction implements FlatMapFunction<RiskPredicti
                 "MEDIUM",
                 String.format(
                     Locale.US,
-                    "设备 %d 出现转速波动异常，speedStd=%.4f，riskProbability=%.4f。",
+                    "设备 %d 出现转速波动异常，speedStd=%.4f，threshold=%.4f，riskProbability=%.4f。",
                     value.getMachineId(),
                     defaultDouble(value.getSpeedStd()),
+                    JobConfig.FEATURE_ALERT_SPEED_STD_THRESHOLD,
                     defaultDouble(value.getRiskProbability())
                 )
             ));
         }
 
-        if (defaultDouble(value.getPressureStd()) >= PRESSURE_STD_THRESHOLD) {
+        if (defaultDouble(value.getPressureStd()) >= JobConfig.FEATURE_ALERT_PRESSURE_STD_THRESHOLD) {
             triggeredAnomalies.add("PRESSURE_FLUCTUATION");
             out.collect(buildAlert(
                 value,
@@ -60,9 +59,10 @@ public class FeatureAnomalyAlertFunction implements FlatMapFunction<RiskPredicti
                 "MEDIUM",
                 String.format(
                     Locale.US,
-                    "设备 %d 出现压力波动异常，pressureStd=%.4f，riskProbability=%.4f。",
+                    "设备 %d 出现压力波动异常，pressureStd=%.4f，threshold=%.4f，riskProbability=%.4f。",
                     value.getMachineId(),
                     defaultDouble(value.getPressureStd()),
+                    JobConfig.FEATURE_ALERT_PRESSURE_STD_THRESHOLD,
                     defaultDouble(value.getRiskProbability())
                 )
             ));
@@ -85,8 +85,8 @@ public class FeatureAnomalyAlertFunction implements FlatMapFunction<RiskPredicti
     }
 
     private boolean isTemperatureRising(RiskPrediction value) {
-        return defaultDouble(value.getTemperatureTrend()) > TEMPERATURE_TREND_THRESHOLD
-            && defaultDouble(value.getTemperatureAvg()) >= TEMPERATURE_AVG_THRESHOLD;
+        return defaultDouble(value.getTemperatureTrend()) > JobConfig.FEATURE_ALERT_TEMPERATURE_TREND_THRESHOLD
+            && defaultDouble(value.getTemperatureAvg()) >= JobConfig.FEATURE_ALERT_TEMPERATURE_AVG_THRESHOLD;
     }
 
     private AlertEvent buildAlert(RiskPrediction value, String alertType, String riskLevel, String message) {

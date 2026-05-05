@@ -1,0 +1,139 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {"type": "mysql", "uid": "${DS_MYSQL}"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "pluginVersion": "10.0.0",
+      "targets": [{"format": "table", "rawSql": "SELECT COUNT(*) AS prediction_count FROM device_risk_prediction;", "refId": "A"}],
+      "title": "实时风险预测总数",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "mysql", "uid": "${DS_MYSQL}"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "id": 2,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "pluginVersion": "10.0.0",
+      "targets": [{"format": "table", "rawSql": "SELECT COUNT(DISTINCT machine_id) AS high_risk_machine_count FROM device_risk_prediction WHERE risk_label = 1 OR risk_level IN ('HIGH', 'CRITICAL');", "refId": "A"}],
+      "title": "高风险设备数量",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "mysql", "uid": "${DS_MYSQL}"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+      "id": 3,
+      "options": {"displayLabels": ["name", "value"], "legend": {"displayMode": "list", "placement": "right"}, "pieType": "pie", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "tooltip": {"mode": "single", "sort": "none"}},
+      "pluginVersion": "10.0.0",
+      "targets": [{"format": "table", "rawSql": "SELECT risk_level, COUNT(*) AS prediction_count FROM device_risk_prediction GROUP BY risk_level ORDER BY prediction_count DESC;", "refId": "A"}],
+      "title": "风险等级分布",
+      "type": "piechart"
+    },
+    {
+      "datasource": {"type": "mysql", "uid": "${DS_MYSQL}"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+      "id": 4,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "orientation": "auto", "showValue": "auto", "tooltip": {"mode": "single", "sort": "none"}},
+      "pluginVersion": "10.0.0",
+      "targets": [{"format": "table", "rawSql": "SELECT machine_id, MAX(risk_probability) AS max_risk_probability FROM device_risk_prediction GROUP BY machine_id ORDER BY max_risk_probability DESC LIMIT 10;", "refId": "A"}],
+      "title": "设备风险 TopN",
+      "type": "barchart"
+    },
+    {
+      "datasource": {"type": "mysql", "uid": "${DS_MYSQL}"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "id": 5,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "orientation": "auto", "showValue": "auto", "tooltip": {"mode": "single", "sort": "none"}},
+      "pluginVersion": "10.0.0",
+      "targets": [{"format": "table", "rawSql": "SELECT alert_type, COUNT(*) AS alert_count FROM alert_event GROUP BY alert_type ORDER BY alert_count DESC;", "refId": "A"}],
+      "title": "告警类型分布",
+      "type": "barchart"
+    },
+    {
+      "datasource": {"type": "mysql", "uid": "${DS_MYSQL}"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 6,
+      "options": {"displayLabels": ["name", "value"], "legend": {"displayMode": "list", "placement": "right"}, "pieType": "pie", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "tooltip": {"mode": "single", "sort": "none"}},
+      "pluginVersion": "10.0.0",
+      "targets": [{"format": "table", "rawSql": "SELECT work_order_priority, COUNT(*) AS recommendation_count FROM maintenance_recommendation GROUP BY work_order_priority ORDER BY work_order_priority;", "refId": "A"}],
+      "title": "维修工单优先级分布",
+      "type": "piechart"
+    },
+    {
+      "datasource": {"type": "mysql", "uid": "${DS_MYSQL}"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 12},
+      "id": 7,
+      "options": {"showHeader": true},
+      "pluginVersion": "10.0.0",
+      "targets": [{"format": "table", "rawSql": "SELECT prediction_id, machine_id, risk_probability, risk_level, rul, model_version, created_at FROM device_risk_prediction ORDER BY window_end DESC LIMIT 20;", "refId": "A"}],
+      "title": "最近预测记录",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "mysql", "uid": "${DS_MYSQL}"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 12},
+      "id": 8,
+      "options": {"showHeader": true},
+      "pluginVersion": "10.0.0",
+      "targets": [{"format": "table", "rawSql": "SELECT alert_id, machine_id, risk_probability, risk_level, alert_type, status, created_at FROM alert_event ORDER BY event_time DESC LIMIT 20;", "refId": "A"}],
+      "title": "最近告警记录",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "mysql", "uid": "${DS_MYSQL}"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 12},
+      "id": 9,
+      "options": {"showHeader": true},
+      "pluginVersion": "10.0.0",
+      "targets": [{"format": "table", "rawSql": "SELECT recommendation_id, alert_id, machine_id, action, spare_parts, work_order_priority, similar_case_id, score, created_at FROM maintenance_recommendation ORDER BY created_at DESC LIMIT 20;", "refId": "A"}],
+      "title": "最近维修推荐表",
+      "type": "table"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "light",
+  "tags": ["zephyr-watch", "business"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "MySQL Datasource",
+        "multi": false,
+        "name": "DS_MYSQL",
+        "options": [],
+        "query": "mysql",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Zephyr Watch Business Monitoring",
+  "uid": "zephyr-watch-business-monitoring",
+  "version": 1,
+  "weekStart": ""
+}

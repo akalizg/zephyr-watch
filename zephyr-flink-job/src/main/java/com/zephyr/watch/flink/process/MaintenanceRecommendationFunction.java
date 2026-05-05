@@ -10,6 +10,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.configuration.Configuration;
 
@@ -42,7 +43,7 @@ public class MaintenanceRecommendationFunction extends RichMapFunction<AlertEven
                 null,
                 alert.getAlertId(),
                 alert.getMachineId(),
-                plan.action,
+                buildAction(alert, plan),
                 plan.spareParts,
                 priority(alert.getRiskLevel()),
                 best.caseId,
@@ -54,43 +55,78 @@ public class MaintenanceRecommendationFunction extends RichMapFunction<AlertEven
         String alertType = safeUpper(alert.getAlertType());
         if ("MODEL_HIGH_RISK".equals(alertType) || "RISK_THRESHOLD".equals(alertType)) {
             return new RecommendationPlan(
-                    "模型判定设备高风险，建议全面检查设备核心部件，安排检修。",
+                    "模型高风险",
+                    "模型判定设备风险较高",
+                    "全面检查设备核心部件并安排检修",
+                    "模型风险概率、RUL 紧急程度和历史相似案例共同评估。",
                     "核心部件检查包,轴承,润滑油,温度传感器"
             );
         }
         if ("TEMPERATURE_RISING".equals(alertType)) {
             return new RecommendationPlan(
-                    "温度持续上升，建议检查冷却系统、润滑系统、温度传感器。",
+                    "温度上升",
+                    "实时特征显示温度均值较高且趋势上升",
+                    "检查冷却系统、润滑系统和温度传感器",
+                    "温度趋势异常叠加模型风险和相似热故障案例。",
                     "冷却风扇,润滑油,油滤,温度传感器"
             );
         }
         if ("SPEED_FLUCTUATION".equals(alertType)) {
             return new RecommendationPlan(
-                    "转速波动异常，建议检查转轴、轴承、负载稳定性。",
+                    "转速波动",
+                    "实时特征显示转速标准差超过阈值",
+                    "检查转轴、轴承和负载稳定性",
+                    "转速波动、RUL 紧急程度和历史旋转部件案例共同触发。",
                     "转轴检查包,轴承,联轴器,负载校准工具"
             );
         }
         if ("PRESSURE_FLUCTUATION".equals(alertType)) {
             return new RecommendationPlan(
-                    "压力波动异常，建议检查气路、压力阀、密封性。",
+                    "压力波动",
+                    "实时特征显示压力标准差超过阈值",
+                    "检查气路、压力阀和密封性",
+                    "压力波动、模型风险和相似气路故障案例共同触发。",
                     "压力阀,密封圈,气路接头,压力传感器"
             );
         }
         if ("COMPOSITE_CRITICAL_RISK".equals(alertType)) {
             return new RecommendationPlan(
-                    "模型高风险叠加实时特征异常，建议立即停机检查，生成 P0 工单。",
+                    "复合高危",
+                    "设备同时命中模型高风险和实时特征异常",
+                    "立即停机检查并生成 P0 工单",
+                    "模型风险、RUL 紧急程度和历史相似案例共同指向高危状态。",
                     "应急检修包,轴承,密封圈,冷却风扇,压力阀"
             );
         }
         if ("CEP_CONSECUTIVE_HIGH_RISK".equals(alertType)) {
             return new RecommendationPlan(
-                    "连续高风险窗口命中，建议复核连续高风险窗口，安排人工确认。",
+                    "连续高风险",
+                    "CEP 检测到连续高风险窗口",
+                    "复核连续高风险窗口并安排人工确认",
+                    "连续窗口风险、模型输出和人工复核价值共同触发。",
                     "人工复核清单,标准巡检包"
             );
         }
         return new RecommendationPlan(
-                "设备存在风险告警，建议结合实时特征、RUL 和历史相似案例安排预防性检修。",
+                "通用风险告警",
+                "设备存在待处理风险告警",
+                "结合实时特征和历史案例安排预防性检修",
+                "模型风险、RUL 和历史相似案例综合评估。",
                 "标准巡检包,常用备件包"
+        );
+    }
+
+    private String buildAction(AlertEvent alert, RecommendationPlan plan) {
+        return String.format(
+                Locale.US,
+                "【%s】%s，riskLevel=%s，riskProbability=%.4f，RUL=%.2f，建议%s。推荐依据：%s",
+                plan.title,
+                plan.meaning,
+                valueOrUnknown(alert.getRiskLevel()),
+                defaultDouble(alert.getRiskProbability(), 0.0D),
+                defaultDouble(alert.getRul(), -1.0D),
+                plan.action,
+                plan.basis
         );
     }
 
@@ -119,11 +155,23 @@ public class MaintenanceRecommendationFunction extends RichMapFunction<AlertEven
     }
 
     private double recommendationScore(AlertEvent alert, CaseProfile candidate) {
-        double riskScore = defaultDouble(alert.getRiskProbability(), 0.0D);
-        double rulUrgency = 1.0D - Math.min(defaultDouble(alert.getRul(), 120.0D) / 120.0D, 1.0D);
-        double similarity = 1.0D / (1.0D + distance(alert, candidate));
-        double score = riskScore * 0.5D + rulUrgency * 0.3D + similarity * 0.2D;
+        double score = riskScore(alert) * 0.5D
+                + rulUrgencyScore(alert) * 0.3D
+                + similarCaseScore(alert, candidate) * 0.2D;
         return Math.round(score * 10000.0D) / 10000.0D;
+    }
+
+    private double riskScore(AlertEvent alert) {
+        return Math.max(0.0D, Math.min(defaultDouble(alert.getRiskProbability(), 0.0D), 1.0D));
+    }
+
+    private double rulUrgencyScore(AlertEvent alert) {
+        double rul = defaultDouble(alert.getRul(), 120.0D);
+        return 1.0D - Math.min(Math.max(rul, 0.0D) / 120.0D, 1.0D);
+    }
+
+    private double similarCaseScore(AlertEvent alert, CaseProfile candidate) {
+        return 1.0D / (1.0D + distance(alert, candidate));
     }
 
     private String priority(String riskLevel) {
@@ -193,15 +241,25 @@ public class MaintenanceRecommendationFunction extends RichMapFunction<AlertEven
     }
 
     private String safeUpper(String value) {
-        return value == null ? "" : value.toUpperCase();
+        return value == null ? "" : value.toUpperCase(Locale.ROOT);
+    }
+
+    private String valueOrUnknown(String value) {
+        return value == null || value.trim().isEmpty() ? "UNKNOWN" : value;
     }
 
     private static final class RecommendationPlan {
+        private final String title;
+        private final String meaning;
         private final String action;
+        private final String basis;
         private final String spareParts;
 
-        private RecommendationPlan(String action, String spareParts) {
+        private RecommendationPlan(String title, String meaning, String action, String basis, String spareParts) {
+            this.title = title;
+            this.meaning = meaning;
             this.action = action;
+            this.basis = basis;
             this.spareParts = spareParts;
         }
     }

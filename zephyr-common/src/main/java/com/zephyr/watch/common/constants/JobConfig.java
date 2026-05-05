@@ -28,7 +28,35 @@ public final class JobConfig {
     public static final double RISK_CRITICAL_THRESHOLD = 0.90D;
     public static final String DEFAULT_MODEL_VERSION = "pmml-local-rul-v1";
 
+    public static final double FEATURE_ALERT_SPEED_STD_THRESHOLD = envDouble(
+            "ZEPHYR_FEATURE_ALERT_SPEED_STD_THRESHOLD",
+            5.0D
+    );
+    public static final double FEATURE_ALERT_PRESSURE_STD_THRESHOLD = envDouble(
+            "ZEPHYR_FEATURE_ALERT_PRESSURE_STD_THRESHOLD",
+            5.0D
+    );
+    public static final double FEATURE_ALERT_TEMPERATURE_AVG_THRESHOLD = envDouble(
+            "ZEPHYR_FEATURE_ALERT_TEMPERATURE_AVG_THRESHOLD",
+            80.0D
+    );
+    public static final double FEATURE_ALERT_TEMPERATURE_TREND_THRESHOLD = envDouble(
+            "ZEPHYR_FEATURE_ALERT_TEMPERATURE_TREND_THRESHOLD",
+            0.0D
+    );
+
     private JobConfig() {
     }
-}
 
+    private static double envDouble(String name, double defaultValue) {
+        String value = System.getenv(name);
+        if (value == null || value.trim().isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            return Double.parseDouble(value.trim());
+        } catch (NumberFormatException ignored) {
+            return defaultValue;
+        }
+    }
+}

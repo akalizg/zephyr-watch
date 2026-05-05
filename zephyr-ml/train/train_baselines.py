@@ -164,6 +164,14 @@ def predict_probability(model: Any, x_test: pd.DataFrame) -> np.ndarray:
     raise ValueError("Model does not expose predict_proba or decision_function.")
 
 
+def safe_average_precision(y_true: np.ndarray, y_prob: np.ndarray, sk: Dict[str, Any]) -> float:
+    try:
+        return float(sk["average_precision_score"](y_true, y_prob))
+    except Exception as exc:
+        print("[WARN] PR-AUC calculation failed: %s" % exc)
+        return 0.0
+
+
 def find_best_threshold(y_true: np.ndarray, y_prob: np.ndarray, sk: Dict[str, Any],
                         min_recall: float) -> Dict[str, float]:
     best = {
@@ -210,7 +218,7 @@ def evaluate_model(name: str, model: Any, x_test: pd.DataFrame, y_test: np.ndarr
         "precision": float(sk["precision_score"](y_test, y_pred, zero_division=0)),
         "recall": float(sk["recall_score"](y_test, y_pred, zero_division=0)),
         "f1": float(sk["f1_score"](y_test, y_pred, zero_division=0)),
-        "pr_auc": float(sk["average_precision_score"](y_test, y_prob)),
+        "pr_auc": safe_average_precision(y_test, y_prob, sk),
         "confusionMatrix": {
             "tn": int(tn),
             "fp": int(fp),
@@ -232,7 +240,7 @@ def plot_pr_curves(y_test: np.ndarray, probabilities: Dict[str, np.ndarray],
         return False
     for name, y_prob in probabilities.items():
         precision, recall, _ = sk["precision_recall_curve"](y_test, y_prob)
-        ap = sk["average_precision_score"](y_test, y_prob)
+        ap = safe_average_precision(y_test, y_prob, sk)
         plt.plot(recall, precision, label="%s AP=%.4f" % (name, ap))
     plt.xlabel("Recall")
     plt.ylabel("Precision")
@@ -384,25 +392,25 @@ def write_threshold_compare(metrics: List[Dict[str, Any]], probabilities: Dict[s
 
 def write_best_model_summary(best: Dict[str, Any], output_path: str) -> None:
     content = [
-        "# Best Model Summary",
-        "",
-        "- 最优模型名称：`%s`" % best["model"],
-        "- 选择依据：按 PR-AUC 从高到低选择，PR-AUC 更适合衡量少数高风险样本的识别能力。",
-        "- PR-AUC：`%.6f`" % best["pr_auc"],
-        "- Precision：`%.6f`" % best["precision"],
-        "- Recall：`%.6f`" % best["recall"],
-        "- F1：`%.6f`" % best["f1"],
-        "- 最优阈值：`%.4f`" % best["threshold"]["threshold"],
-        "",
-        "## 为什么不主要看 Accuracy",
-        "",
-        "设备高风险样本通常占比更低，模型即使大量预测为低风险也可能得到较高 Accuracy。答辩和生产排查更关心高风险样本是否被及时召回，以及误报是否在可接受范围内，因此本报告主要看 Precision、Recall、F1 和 PR-AUC。",
-        "",
-        "## 当前模型局限",
-        "",
-        "- 当前训练仍以表格特征和传统机器学习模型为主，没有宣称完成 ONNX、TF Serving 或深度时序模型。",
-        "- 模型效果依赖训练数据分布，真实设备迁移时需要持续补充人工审核反馈样本。",
-        "- 阈值来自离线测试集，线上可结合人工审核结果继续校准。",
+        '# Best Model Summary',
+        '',
+        '- 最优模型名称：`%s`' % best["model"],
+        '- 选择依据：按 PR-AUC 从高到低选择，PR-AUC 更适合衡量少数高风险样本的识别能力。',
+        '- PR-AUC：`%.6f`' % best["pr_auc"],
+        '- Precision：`%.6f`' % best["precision"],
+        '- Recall：`%.6f`' % best["recall"],
+        '- F1：`%.6f`' % best["f1"],
+        '- 最优阈值：`%.4f`' % best["threshold"]["threshold"],
+        '',
+        '## 为什么不主要看 Accuracy',
+        '',
+        '高风险样本通常占比更低，Accuracy 容易被正常样本数量稀释。本报告主要关注 Precision、Recall、F1 和 PR-AUC，用来衡量高风险识别能力与误报控制。',
+        '',
+        '## 当前模型局限',
+        '',
+        '- 当前训练仍以表格特征和传统机器学习模型为主，没有宣称完成 ONNX、TF Serving 或深度时序模型。',
+        '- 模型效果依赖训练数据分布，真实设备迁移时需要持续补充人工审核反馈样本。',
+        '- 阈值来自离线测试集，线上可结合人工审核结果继续校准。',
     ]
     with open(output_path, "w", encoding="utf-8") as f:
         f.write("\n".join(content) + "\n")
@@ -411,11 +419,12 @@ def write_best_model_summary(best: Dict[str, Any], output_path: str) -> None:
 def maybe_write_fusion_reports(metrics: List[Dict[str, Any]], probabilities: Dict[str, np.ndarray],
                                y_test: np.ndarray, sk: Dict[str, Any], min_recall: float,
                                artifact_dir: str, report_dir: str) -> None:
-    if len(metrics) < 2:
+    if len(metrics) < 2 or len(probabilities) < 2:
         return
 
     positive_pr_auc_sum = sum(max(metric["pr_auc"], 0.0) for metric in metrics)
     if positive_pr_auc_sum <= 0:
+        print("[WARN] Fusion report skipped because PR-AUC weight sum is 0.")
         return
 
     weights = {
@@ -436,7 +445,7 @@ def maybe_write_fusion_reports(metrics: List[Dict[str, Any]], probabilities: Dic
         "precision": float(sk["precision_score"](y_test, y_pred, zero_division=0)),
         "recall": float(sk["recall_score"](y_test, y_pred, zero_division=0)),
         "f1": float(sk["f1_score"](y_test, y_pred, zero_division=0)),
-        "pr_auc": float(sk["average_precision_score"](y_test, fusion_prob)),
+        "pr_auc": safe_average_precision(y_test, fusion_prob, sk),
         "roc_auc": None,
         "confusionMatrix": {
             "tn": int(tn),
@@ -465,6 +474,10 @@ def write_experiment_reports(df: pd.DataFrame, metrics: List[Dict[str, Any]],
                              probabilities: Dict[str, np.ndarray], y_test: np.ndarray,
                              sk: Dict[str, Any], min_recall: float,
                              artifact_dir: str, report_dir: str) -> None:
+    os.makedirs(report_dir, exist_ok=True)
+    os.makedirs(artifact_dir, exist_ok=True)
+    if not metrics:
+        raise RuntimeError("No model metrics available; all model training attempts failed.")
     model_rows = [flatten_metric_row(metric) for metric in metrics]
     pd.DataFrame(model_rows, columns=[
         "model", "precision", "recall", "f1", "pr_auc", "roc_auc", "threshold", "tn", "fp", "fn", "tp"
@@ -517,6 +530,9 @@ def main() -> None:
         probabilities[name] = y_prob
         trained_models[name] = model
         joblib.dump(model, os.path.join(args.artifact_dir, "%s.pkl" % name))
+
+    if not metrics:
+        raise RuntimeError("No model trained successfully. Please check sklearn installation and training data.")
 
     metrics = sorted(metrics, key=lambda item: item["pr_auc"], reverse=True)
     best = metrics[0]

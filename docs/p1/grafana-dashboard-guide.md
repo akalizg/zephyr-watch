@@ -141,3 +141,7 @@ ORDER BY label_count DESC;
 6. 如果人工审核标签为空，确认审核接口或 `review_label_topic` 消息已写入。
 7. Grafana 查询使用时间过滤时，注意 `window_end` 和 `event_time` 是毫秒时间戳，SQL 中需要除以 1000 后转成 MySQL 时间。
 8. 当前文档不覆盖 Prometheus/Flink/Kafka/JVM 全链路系统监控；如果系统指标面板为空，应检查 Prometheus 后续扩展配置，而不是把它作为本业务看板的验收前提。
+
+## 导入业务 Dashboard JSON
+
+Grafana 页面选择 `Dashboards -> New -> Import`，上传 `zephyr-dashboard/grafana/zephyr-watch-business-dashboard.json`，并在导入时将 `${DS_MYSQL}` 绑定到当前 MySQL 数据源即可。
