@@ -125,22 +125,41 @@ beeline -u jdbc:hive2://localhost:10000 -n root
 -打开虚拟机的beeline，执行以下 SQL 创建外部表：
 -[hive_init.sql](zephyr-flink-job/src/main/resources/sql/hive_init.sql)
 
-## 🐍 五、 🛠 已完成的核心功能
-目前项目已经搭建起从数据仿真到实时推理的完整闭环：
+## 🐍 五、🛠 已完成的核心功能
 
-高并发实时流处理：基于 Flink 实现传感器数据的实时清洗、校验（SensorValidationFilter）和特征窗口聚合（FeatureWindowProcessFunction）。
+目前项目已经搭建起从数据仿真、实时特征工程、风险模型推理到告警输出和维修推荐的基础闭环，能够支撑课程项目答辩和功能演示。
 
-实时特征工程：利用 Flink 滑动窗口计算传感器的统计特征（均值、标准差等），为模型提供高质量输入。
+### 1. 实时流处理与数据清洗
 
-在线模型推理：集成 JPMML，在 Flink 流中实时加载 .pmml 模型文件，实现低延迟的 RUL 预测。
+项目基于 Flink 实现传感器数据的实时接入、字段校验、异常数据过滤和窗口特征聚合。实时任务能够按设备编号进行分组处理，并基于滑动窗口持续生成压力、温度、转速等传感器统计特征。
 
-多维数据持久化：
+### 2. 实时特征工程
 
-实时侧：预测结果通过 RulRedisMapper 写入 Redis，支持前端秒级查询。
+系统利用 Flink 滑动窗口计算均值、最大值、最小值、标准差、趋势值等特征，为后续风险分类模型提供在线输入。离线训练和在线推理尽量保持一致的特征字段口径，减少训练与推理阶段的特征偏差。
 
-离线侧：原始特征与预测数据通过 HdfsCsvSinkFactory 存入 HDFS，为后续离线分析和模型微调打下基础。
+### 3. 在线风险模型推理
 
-ML 训练管道：包含完整的 Python 机器学习流程，支持从 Hive/CSV 读取数据、特征构建、随机森林（Random Forest）模型训练及评估。
+当前在线推理主链路采用 Flink 调用 Flask REST 模型服务的方式完成风险分类推理。模型服务默认加载 `best_risk_model.pkl`、`threshold.json`、`feature_columns.json` 和 `model_metadata.json`，输出 `riskProbability`、`riskLabel`、`riskLevel` 等结果。PMML 文件已作为模型导出产物保留，JPMML 本地推理能力属于部分完成和后续增强方向。
+
+### 4. 多类型告警机制
+
+系统已经实现多层告警逻辑，包括模型阈值告警、特征异常规则告警和 CEP 连续高风险告警。特征异常规则覆盖温度持续上升、转速波动异常、压力波动异常和复合高危风险，能够提升实时风险识别的可解释性。
+
+### 5. 多维数据持久化
+
+实时预测结果、告警事件、在线特征快照、人工审核反馈和维修推荐结果可以写入 MySQL；设备最新风险状态和推荐结果可写入 Redis；预测结果、告警事件和审核标签可通过 Kafka Topic 进行流转。同时，清洗后的明细数据和窗口特征数据可落地到 HDFS，并通过 Hive 外部表支撑离线分析和模型训练。
+
+### 6. 机器学习训练管道
+
+Python 侧已经提供风险分类模型训练流程，支持 Logistic Regression、Random Forest、XGBoost、LightGBM 等基线模型，并输出模型对比报告、阈值配置、特征列文件、模型元数据和简单加权融合结果。模型评价重点采用 Precision、Recall、F1-score 和 PR-AUC，而不是单纯依赖 Accuracy。
+
+### 7. 业务查询与可视化展示
+
+Spring Boot 后端已经提供 Dashboard API 和轻量 Dashboard 页面，用于展示预测总数、高风险设备数量、风险等级分布、告警类型分布、设备风险 TopN、最新预测、最新告警和维修推荐。同时，项目提供 Grafana 业务看板 SQL 与可导入 Dashboard JSON，支持基于 MySQL 的业务可视化展示。
+
+### 8. 维修推荐与人工反馈
+
+系统已实现基于风险等级、RUL、告警类型和历史相似案例的维修推荐逻辑，能够生成维修动作、备件建议、工单优先级和推荐评分。同时，人工审核标签可进入反馈链路，为后续增量训练和模型优化提供数据基础。
 
 ## 六、系统双分支技术路线
 
@@ -1611,21 +1630,6 @@ zephyr-dashboard/grafana/provisioning/datasources/prometheus.yml
 zephyr-dashboard/grafana/dashboards/zephyr-watch-business.json
 zephyr-dashboard/grafana/dashboards/zephyr-watch-system.json
 ```
-
-## 当前状态
-
-已完成：
-- Flink 调用 Python 风险分类模型服务。
-- `threshold.json` 统一控制线上 `riskLabel` 和告警触发。
-- MySQL 保存风险预测、告警、审核反馈和反馈训练样本。
-- 增量训练可以导出 `feedback_training_sample` 并合并进训练集。
-- 已补 Grafana MySQL / Prometheus datasource 和业务 / 系统 dashboard。
-- Spring Boot 已有 Webhook 配置管理接口。
-- `StorageConfig` 和 `KafkaConfig` 已支持环境变量。
-
-后续增强：
-- 分类模型 PMML 部署部分完成，ONNX 部署为后续扩展。
-- Two-Tower、LightGCN、SASRec 等高级推荐模型为后续扩展。
 
 <!-- P0_RUNBOOK_END -->
 
