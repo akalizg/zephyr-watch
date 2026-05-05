@@ -9,6 +9,7 @@ import com.zephyr.watch.common.entity.RiskPrediction;
 import com.zephyr.watch.common.entity.SensorReading;
 import com.zephyr.watch.flink.process.CepConsecutiveRiskAlertSelector;
 import com.zephyr.watch.flink.process.EventTimeWatermarkStrategyFactory;
+import com.zephyr.watch.flink.process.FeatureAnomalyAlertFunction;
 import com.zephyr.watch.flink.process.FeatureWindowProcessFunction;
 import com.zephyr.watch.flink.process.FlinkRuntimeConfigurer;
 import com.zephyr.watch.flink.process.ParseAndValidateSensorProcessFunction;
@@ -115,6 +116,10 @@ public class OnlineInferenceJob {
             .flatMap(new RiskThresholdAlertFunction())
             .name("Risk_Threshold_Alert");
 
+        SingleOutputStreamOperator<AlertEvent> featureAnomalyAlertStream = riskStream
+            .flatMap(new FeatureAnomalyAlertFunction())
+            .name("Feature_Anomaly_Alert");
+
         Pattern<RiskPrediction, ?> consecutiveRiskPattern = Pattern
             .<RiskPrediction>begin("first")
             .where(new HighRiskLabelCondition())
@@ -131,7 +136,9 @@ public class OnlineInferenceJob {
             .select(new CepConsecutiveRiskAlertSelector())
             .name("CEP_Consecutive_High_Risk_Alert");
 
-        DataStream<AlertEvent> alertStream = thresholdAlertStream.union(cepAlertStream);
+        DataStream<AlertEvent> alertStream = thresholdAlertStream
+            .union(featureAnomalyAlertStream)
+            .union(cepAlertStream);
 
         if (debugPrint) {
             alertStream.print("ALERT_EVENT");
