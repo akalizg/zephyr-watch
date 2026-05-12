@@ -1,0 +1,26 @@
+server:
+  port: ${ZEPHYR_API_PORT:8080}
+
+spring:
+  datasource:
+    url: ${ZEPHYR_MYSQL_URL:jdbc:mysql://127.0.0.1:3306/zephyr_watch?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai}
+    username: ${ZEPHYR_MYSQL_USER:root}
+    password: ${ZEPHYR_MYSQL_PASSWORD:comeonYZ6}
+    driver-class-name: com.mysql.jdbc.Driver
+  redis:
+    host: ${ZEPHYR_REDIS_HOST:127.0.0.1}
+    port: ${ZEPHYR_REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${ZEPHYR_KAFKA_BOOTSTRAP_SERVERS:192.168.88.161:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always

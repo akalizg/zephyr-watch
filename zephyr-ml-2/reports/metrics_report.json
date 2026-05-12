@@ -1,0 +1,95 @@
+{
+  "createdAt": "2026-05-11 22:56:45",
+  "input": "D:\\软件\\机器学习\\zephyr-watch-main (1)\\zephyr-watch-main\\zephyr-ml-2\\data\\merged_train_dataset.csv",
+  "trainSamples": 10,
+  "testSamples": 2,
+  "positiveTrainSamples": 9,
+  "positiveTestSamples": 2,
+  "metrics": [
+    {
+      "model": "logistic_regression",
+      "threshold": {
+        "threshold": 0.01,
+        "f1": 1.0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "pr_auc": 1.0,
+      "confusionMatrix": {
+        "tn": 0,
+        "fp": 0,
+        "fn": 0,
+        "tp": 2
+      },
+      "roc_auc": null
+    },
+    {
+      "model": "random_forest",
+      "threshold": {
+        "threshold": 0.01,
+        "f1": 1.0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "pr_auc": 1.0,
+      "confusionMatrix": {
+        "tn": 0,
+        "fp": 0,
+        "fn": 0,
+        "tp": 2
+      },
+      "roc_auc": null
+    },
+    {
+      "model": "xgboost",
+      "threshold": {
+        "threshold": 0.01,
+        "f1": 1.0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "pr_auc": 1.0,
+      "confusionMatrix": {
+        "tn": 0,
+        "fp": 0,
+        "fn": 0,
+        "tp": 2
+      },
+      "roc_auc": null
+    },
+    {
+      "model": "lightgbm",
+      "threshold": {
+        "threshold": 0.01,
+        "f1": 1.0,
+        "precision": 1.0,
+        "recall": 1.0
+      },
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "pr_auc": 1.0,
+      "confusionMatrix": {
+        "tn": 0,
+        "fp": 0,
+        "fn": 0,
+        "tp": 2
+      },
+      "roc_auc": null
+    }
+  ],
+  "skippedModels": []
+}

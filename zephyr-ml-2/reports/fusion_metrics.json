@@ -1,0 +1,21 @@
+{
+  "model": "weighted_pr_auc_fusion",
+  "weights": {
+    "logistic_regression": 0.25,
+    "random_forest": 0.25,
+    "xgboost": 0.25,
+    "lightgbm": 0.25
+  },
+  "threshold": 0.01,
+  "precision": 1.0,
+  "recall": 1.0,
+  "f1": 1.0,
+  "pr_auc": 1.0,
+  "roc_auc": null,
+  "confusionMatrix": {
+    "tn": 0,
+    "fp": 0,
+    "fn": 0,
+    "tp": 2
+  }
+}

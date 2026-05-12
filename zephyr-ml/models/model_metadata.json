@@ -1,0 +1,34 @@
+{
+  "modelVersion": "risk-baseline-20260510215501",
+  "modelType": "P1_RiskClassification_Baselines",
+  "modelRuntime": "REST_PKL",
+  "modelUri": "best_risk_model.pkl",
+  "optionalPmmlUri": "best_risk_model.pmml",
+  "thresholdUri": "threshold.json",
+  "featureColumnsUri": "feature_columns.json",
+  "metadataUri": "model_metadata.json",
+  "bestModel": "logistic_regression",
+  "selectionMetric": "pr_auc",
+  "metrics": {
+    "model": "logistic_regression",
+    "threshold": {
+      "threshold": 0.83,
+      "f1": 0.8956661316211878,
+      "precision": 0.8913738019169329,
+      "recall": 0.9
+    },
+    "accuracy": 0.9680589680589681,
+    "precision": 0.8913738019169329,
+    "recall": 0.9,
+    "f1": 0.8956661316211878,
+    "pr_auc": 0.9628055471937254,
+    "confusionMatrix": {
+      "tn": 3382,
+      "fp": 68,
+      "fn": 62,
+      "tp": 558
+    },
+    "roc_auc": 0.9920864890135578
+  },
+  "status": "LOCAL_READY"
+}

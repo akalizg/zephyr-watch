@@ -1,0 +1,17 @@
+{
+  "model": "weighted_pr_auc_fusion",
+  "weights": {
+    "logistic_regression": 0.2513924615548454,
+    "xgboost": 0.24999157575237307,
+    "lightgbm": 0.24948886196132175,
+    "random_forest": 0.2491271007314597
+  },
+  "threshold": 0.7302,
+  "precision": 0.8809549050576616,
+  "recall": 0.8847189240299876,
+  "f1": 0.8827211457411358,
+  "pr_auc": 0.9574839172437597,
+  "roc_auc": 0.9906080492733127,
+  "estimatedFromModelMetrics": true,
+  "note": "This fallback report is aggregated from existing model metrics because the local Python 3.13 runtime is not executable. The enhanced train_baselines.py computes real probability-level fusion metrics when training runs normally."
+}

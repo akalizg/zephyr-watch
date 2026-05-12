@@ -1,0 +1,3 @@
+review_id,alert_id,reviewer,review_label,review_comment,reviewed_at,machine_id,event_time,risk_probability,rul,risk_level,alert_type,model_version
+1,alert_001,Student_C,TRUE_POSITIVE,压力异常波动，确认是设备故障,2026-05-11T14:08:45.000+00:00,,,,,,,
+2,32_1777394610000,Student_C,FALSE_POSITIVE,传感器抖动导致的误报,2026-05-11T14:08:45.000+00:00,,,,,,,

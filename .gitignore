@@ -1,0 +1,10 @@
+venv/ 
+*.exe 
+*.dll 
+*.so 
+*.dylib 
+.idea/ 
+.vscode/ 
+*.iml 
+__pycache__/ 
+*.pyc 

@@ -1,0 +1,14 @@
+com\zephyr\watch\common\entity\RulPrediction.class
+com\zephyr\watch\common\constants\StorageConfig.class
+com\zephyr\watch\common\entity\SensorReading.class
+com\zephyr\watch\common\dto\WebhookConfigRequest.class
+com\zephyr\watch\common\entity\AlertEvent.class
+com\zephyr\watch\common\entity\FeatureVector.class
+com\zephyr\watch\common\dto\AlertReviewRequest.class
+com\zephyr\watch\common\dto\ModelRegistryRequest.class
+com\zephyr\watch\common\utils\CsvUtils.class
+com\zephyr\watch\common\utils\JsonUtils.class
+com\zephyr\watch\common\entity\RiskPrediction.class
+com\zephyr\watch\common\constants\JobConfig.class
+com\zephyr\watch\common\constants\KafkaConfig.class
+com\zephyr\watch\common\entity\MaintenanceRecommendation.class

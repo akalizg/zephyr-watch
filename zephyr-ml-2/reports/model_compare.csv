@@ -1,0 +1,5 @@
+model,precision,recall,f1,pr_auc,roc_auc,threshold,tn,fp,fn,tp
+logistic_regression,1.0,1.0,1.0,1.0,,0.01,0,0,0,2
+random_forest,1.0,1.0,1.0,1.0,,0.01,0,0,0,2
+xgboost,1.0,1.0,1.0,1.0,,0.01,0,0,0,2
+lightgbm,1.0,1.0,1.0,1.0,,0.01,0,0,0,2

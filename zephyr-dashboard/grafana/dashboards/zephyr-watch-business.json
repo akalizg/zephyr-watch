@@ -1,0 +1,102 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {"type": "mysql", "uid": "ZephyrMySQL"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"showHeader": true},
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT\n  machine_id,\n  risk_probability,\n  risk_label,\n  risk_level,\n  rul,\n  model_version,\n  FROM_UNIXTIME(event_time / 1000) AS event_time\nFROM device_risk_prediction\nORDER BY event_time DESC\nLIMIT 50;",
+          "refId": "A"
+        }
+      ],
+      "title": "Latest Device Risk",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "mysql", "uid": "ZephyrMySQL"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 2,
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT\n  FROM_UNIXTIME(event_time / 1000) AS time,\n  risk_probability,\n  machine_id AS metric\nFROM device_risk_prediction\nWHERE $__timeFilter(FROM_UNIXTIME(event_time / 1000))\nORDER BY time;",
+          "refId": "A"
+        }
+      ],
+      "title": "Risk Probability Trend",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "mysql", "uid": "ZephyrMySQL"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 3,
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT\n  FROM_UNIXTIME(event_time / 1000) AS time,\n  rul,\n  machine_id AS metric\nFROM device_risk_prediction\nWHERE $__timeFilter(FROM_UNIXTIME(event_time / 1000))\nORDER BY time;",
+          "refId": "A"
+        }
+      ],
+      "title": "RUL Trend",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "mysql", "uid": "ZephyrMySQL"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+      "id": 4,
+      "options": {"showHeader": true},
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT\n  alert_id,\n  machine_id,\n  risk_probability,\n  rul,\n  risk_level,\n  alert_type,\n  message,\n  source,\n  status,\n  model_version,\n  FROM_UNIXTIME(event_time / 1000) AS event_time\nFROM alert_event\nORDER BY event_time DESC\nLIMIT 50;",
+          "refId": "A"
+        }
+      ],
+      "title": "High Risk Alerts",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "mysql", "uid": "ZephyrMySQL"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+      "id": 5,
+      "options": {"showHeader": true},
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT\n  recommendation_id,\n  alert_id,\n  machine_id,\n  action,\n  spare_parts,\n  work_order_priority,\n  similar_case_id,\n  score,\n  created_at\nFROM maintenance_recommendation\nORDER BY created_at DESC\nLIMIT 50;",
+          "refId": "A"
+        }
+      ],
+      "title": "Maintenance Recommendations",
+      "type": "table"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["zephyr-watch"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Zephyr Watch Business Dashboard",
+  "uid": "zephyr-watch-business",
+  "version": 1,
+  "weekStart": ""
+}

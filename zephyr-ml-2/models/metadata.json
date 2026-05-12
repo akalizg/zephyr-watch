@@ -1,0 +1,33 @@
+{
+  "modelType": "RandomForestRegressor_PMML",
+  "createdAt": "2026-04-22 15:31:53",
+  "featureColumns": [
+    "sampleCount",
+    "cycleStart",
+    "cycleEnd",
+    "pressureMin",
+    "pressureMax",
+    "pressureAvg",
+    "pressureStd",
+    "pressureTrend",
+    "temperatureMin",
+    "temperatureMax",
+    "temperatureAvg",
+    "temperatureStd",
+    "temperatureTrend",
+    "speedMin",
+    "speedMax",
+    "speedAvg",
+    "speedStd",
+    "speedTrend"
+  ],
+  "targetColumn": "RUL",
+  "trainSamples": 16561,
+  "testSamples": 4070,
+  "trainMachines": 80,
+  "testMachines": 20,
+  "randomState": 42,
+  "nEstimators": 300,
+  "maxDepth": 10,
+  "r2_score": 0.7103386337149047
+}

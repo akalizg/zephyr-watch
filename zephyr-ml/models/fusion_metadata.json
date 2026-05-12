@@ -1,0 +1,19 @@
+{
+  "fusionType": "weighted_probability_average",
+  "weightRule": "weight = model PR-AUC / sum(PR-AUC of all trained models)",
+  "models": [
+    "logistic_regression",
+    "xgboost",
+    "lightgbm",
+    "random_forest"
+  ],
+  "weights": {
+    "logistic_regression": 0.2513924615548454,
+    "xgboost": 0.24999157575237307,
+    "lightgbm": 0.24948886196132175,
+    "random_forest": 0.2491271007314597
+  },
+  "threshold": 0.7302,
+  "createdAt": "2026-05-10 21:59:26",
+  "note": "Run train_baselines.py in a working ML environment to compute probability-level fusion metrics."
+}
