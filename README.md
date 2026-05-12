@@ -516,6 +516,62 @@ minio://zephyr-models/risk/model_metadata.json
 ```
 
 ---
+## 分支 C：实时数据在线训练链路
+
+分支 C 负责捕获实时推理阶段的人工反馈，将“生产数据”转化为“训练样本”，并通过增量学习算法实现模型的在线进化与热部署。
+
+整体链路如下：
+
+```text
+Flink 在线推理与告警产生
+    ↓
+人工审核 (Manual Review) 与标签回流
+    ↓
+反馈样本对齐 (Feature + Label) 与 MySQL 存储
+    ↓
+Python 触发增量训练 (Incremental Retrain)
+    ↓
+自动化模型注册与 MinIO 版本分发
+    ↓
+Flink 不停机热加载 (Hot Reload)
+```
+## C1. 人工审核与标签回流
+### 目标
+将实时流中的未知预测结果通过“人工干预”转化为具备监督学习价值的“标准答案”。
+
+### 具体逻辑
+交互逻辑：当 OnlineInferenceJob 产生高风险告警并写入 alert_event 表后，业务专家通过 AlertReviewController 接口对该告警进行判定（确认真实故障或标记误报）。
+
+数据流向：审核动作触发 review_label_topic 消息流，由 AlertReviewJob 实时捕获。
+
+## C2. 反馈样本实时对齐
+### 目标
+将专家的“标签”与产生告警时的“特征快照”精确对齐，构建增量训练集。
+
+### 实现内容
+特征回溯：系统自动提取产生告警时的 15 维滑动窗口特征，将其与 review_label（1 或 0）绑定。
+
+持久化：将对齐后的样本写入 MySQL 的 feedback_training_sample 表。这标志着实时生产数据正式“活化”为可用于重训的训练样本。
+
+## C3. 增量重训 (Incremental Retrain)
+### 目标
+利用最新的反馈样本对模型进行“小步快跑”式的微调，而非昂齐的全量重练。
+
+### 技术逻辑
+微调机制 (Fine-tuning)：incremental_retrain.py 脚本从 API 抓取最新的反馈样本，在现有基准模型的基础上进行权重更新。
+
+自适应学习：使模型能够实时吸收最新的故障模式（如设备在极端天气下的特殊退化特征），有效对抗“概念漂移”。
+
+## C4. 自动化版本分发与热加载
+### 目标
+确保训练成果在不中断生产环境监控的前提下，瞬间投入实战。
+
+### 闭环操作
+模型注册：重训产生的模型由 register_model.py 自动推送到 MinIO，并向后端注册为 ACTIVE 状态。
+
+热加载体现：运行中的 OnlineInferenceJob 通过定时轮询机制感应到 model_registry 的版本变更，无需重启 Flink 任务，直接在内存中完成模型对象的替换。
+
+---
 
 ## 分支 B：在线推理链路
 
