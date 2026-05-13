@@ -30,7 +30,8 @@ if "%MODEL_SERVICE_URL%"=="" set "MODEL_SERVICE_URL=http://localhost:5001/api/ri
 
 if "%ZEPHYR_AUTO_BOOTSTRAP_MODEL%"=="" set "ZEPHYR_AUTO_BOOTSTRAP_MODEL=true"
 
-set "PYTHON_EXE=%ROOT%zephyr-ml\.venv1\Scripts\python.exe"
+set "PYTHON_EXE=%ROOT%.venv\Scripts\python.exe"
+if not exist "%PYTHON_EXE%" set "PYTHON_EXE=%ROOT%zephyr-ml\.venv1\Scripts\python.exe"
 if not exist "%PYTHON_EXE%" set "PYTHON_EXE=python"
 
 echo ============================================================
@@ -76,8 +77,32 @@ echo.
 echo [2/7] Starting Spring Boot API...
 start "Zephyr API" /D "%ROOT%" cmd /k "mvn -q -f zephyr-api/pom.xml org.springframework.boot:spring-boot-maven-plugin:2.7.18:run"
 
+echo Waiting for Spring Boot API health check...
+set "API_HEALTH_URL=http://localhost:8080/actuator/health"
+set "API_WAIT_MAX=60"
+set /a API_WAIT_COUNT=0
+:wait_api
+curl.exe -fsS "%API_HEALTH_URL%" >nul 2>nul
+if not errorlevel 1 goto api_ready
+set /a API_WAIT_COUNT+=1
+if %API_WAIT_COUNT% geq %API_WAIT_MAX% goto api_timeout
+timeout /t 2 /nobreak >nul
+goto wait_api
+
+:api_ready
+echo Spring Boot API is ready.
+
 echo [3/7] Starting Python Risk Model Service...
 start "Zephyr Risk Model Service" /D "%ROOT%zephyr-ml" cmd /k ""%PYTHON_EXE%" serve\risk_model_service.py"
+goto continue_startup
+
+:api_timeout
+echo [ERROR] Spring Boot API did not become healthy within the expected time.
+echo Please inspect the "Zephyr API" window, then rerun this script.
+pause
+exit /b 1
+
+:continue_startup
 
 echo [4/7] Starting OnlineInferenceJob...
 start "Zephyr OnlineInferenceJob" /D "%ROOT%" cmd /k "mvn -q -f zephyr-flink-job/pom.xml org.codehaus.mojo:exec-maven-plugin:3.3.0:java ^"-Dexec.mainClass=com.zephyr.watch.flink.app.OnlineInferenceJob^" ^"-Dexec.args=%PMML_PATH% %MODEL_VERSION% %DEBUG_PRINT% %MODEL_SERVICE_URL%^""
