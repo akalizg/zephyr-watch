@@ -1474,8 +1474,6 @@ Kafka 消息堆积
 - Prometheus 系统级监控 Dashboard：尚未完成 Prometheus 抓取 Flink、Kafka、JVM、主机资源和业务服务指标，也未形成可导入的系统监控 Grafana Dashboard。
 - 模型灰度发布与自动回滚：尚未实现按模型版本分流、灰度指标采集、候选模型与当前模型对比、失败判定和自动回滚。
 - 生产级自动调度与热加载增强：增量训练 loop 已有，但还缺少任务幂等、调度状态持久化、失败重试、运行告警、模型热加载审计记录。
-- Linux/Mac 一键启动脚本：目前主要支持 Windows `run-all.bat`，尚未提供等价的 `run-all.sh`。
-- Docker Compose 基础设施脚本：尚未把 Kafka、MySQL、Redis、MinIO、Prometheus、Grafana 等基础设施整理成一键启动的 compose 文件。
 - Flink Async I/O REST 推理：当前 REST 风险推理是同步 map 调用，尚未改造成 Async I/O 以提升吞吐和隔离外部模型服务抖动。
 
 ## 十三、项目创新点
