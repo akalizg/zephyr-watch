@@ -11,6 +11,15 @@ __pycache__/
 *.pyc 
 target/
 **/target/
+*.log
+logs/
+**/logs/
+runtime-logs/
 .env
 .env.*
 !.env.example
+zephyr-ml/data/feedback_training_sample.csv
+zephyr-ml/data/review_labels.csv
+zephyr-ml/data/normalized_feedback_samples.csv
+zephyr-ml/data/merged_train_dataset.csv
+zephyr-ml/reports/incremental_retrain_summary.json

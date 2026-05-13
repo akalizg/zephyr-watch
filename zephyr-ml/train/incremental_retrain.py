@@ -3,16 +3,27 @@ import json
 import os
 import subprocess
 import sys
+import time
 from typing import Tuple
 
 import pandas as pd
 import requests
+from pandas.errors import EmptyDataError
 
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 ML_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
 DATA_DIR = os.path.join(ML_ROOT, "data")
 REPORT_DIR = os.path.join(ML_ROOT, "reports")
+
+
+def safe_read_csv(path: str) -> pd.DataFrame:
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    try:
+        return pd.read_csv(path)
+    except EmptyDataError:
+        return pd.DataFrame()
 
 
 def export_review_labels(api_base: str, output_path: str, limit: int) -> int:
@@ -56,7 +67,7 @@ def normalize_feedback(input_path: str, output_path: str) -> int:
         pd.DataFrame().to_csv(output_path, index=False)
         return 0
 
-    feedback_df = pd.read_csv(input_path)
+    feedback_df = safe_read_csv(input_path)
     if len(feedback_df) == 0:
         feedback_df.to_csv(output_path, index=False)
         return 0
@@ -110,13 +121,13 @@ def normalize_feedback(input_path: str, output_path: str) -> int:
 
 
 def merge_training_data(base_path: str, feedback_path: str, output_path: str) -> Tuple[int, int]:
-    base_df = pd.read_csv(base_path)
+    base_df = safe_read_csv(base_path)
 
     if not os.path.exists(feedback_path):
         base_df.to_csv(output_path, index=False)
         return len(base_df), 0
 
-    feedback_df = pd.read_csv(feedback_path)
+    feedback_df = safe_read_csv(feedback_path)
     if len(feedback_df) == 0:
         base_df.to_csv(output_path, index=False)
         return len(base_df), 0
@@ -149,48 +160,62 @@ def main():
     parser.add_argument("--require-all", action="store_true")
     parser.add_argument("--register", action="store_true")
     parser.add_argument("--activate", action="store_true")
+    parser.add_argument("--loop", action="store_true")
+    parser.add_argument("--poll-interval-sec", type=int, default=300)
     args = parser.parse_args()
 
     os.makedirs(REPORT_DIR, exist_ok=True)
-    exported = export_review_labels(args.api_base, args.review_label_output, args.review_limit)
-    exported_feedback = 0
-    if not args.skip_export_feedback:
-        exported_feedback = export_feedback_training_samples(args.api_base, args.feedback_input, args.review_limit)
-    normalized = normalize_feedback(args.feedback_input, args.normalized_feedback_output)
-    base_count, feedback_count = merge_training_data(
-        args.training_input,
-        args.normalized_feedback_output if normalized > 0 else args.feedback_input,
-        args.merged_output,
-    )
 
-    summary = {
-        "exportedReviewLabels": exported,
-        "exportedFeedbackTrainingSamples": exported_feedback,
-        "normalizedFeedbackSamples": normalized,
-        "baseSamples": base_count,
-        "mergedFeedbackSamples": feedback_count,
-        "mergedOutput": args.merged_output,
-    }
+    def run_once() -> None:
+        exported = export_review_labels(args.api_base, args.review_label_output, args.review_limit)
+        exported_feedback = 0
+        if not args.skip_export_feedback:
+            exported_feedback = export_feedback_training_samples(args.api_base, args.feedback_input, args.review_limit)
+        normalized = normalize_feedback(args.feedback_input, args.normalized_feedback_output)
+        base_count, feedback_count = merge_training_data(
+            args.training_input,
+            args.normalized_feedback_output if normalized > 0 else args.feedback_input,
+            args.merged_output,
+        )
 
-    if exported < args.min_labels and feedback_count < args.min_labels:
-        summary["skipped"] = True
-        summary["reason"] = "not enough review labels or feedback samples"
+        summary = {
+            "exportedReviewLabels": exported,
+            "exportedFeedbackTrainingSamples": exported_feedback,
+            "normalizedFeedbackSamples": normalized,
+            "baseSamples": base_count,
+            "mergedFeedbackSamples": feedback_count,
+            "mergedOutput": args.merged_output,
+        }
+
+        if exported < args.min_labels and feedback_count < args.min_labels:
+            summary["skipped"] = True
+            summary["reason"] = "not enough review labels or feedback samples"
+        else:
+            train_script = os.path.join("train", "train_baselines.py")
+            train_command = [sys.executable, train_script, "--input", args.merged_output]
+            if args.require_all:
+                train_command.append("--require-all")
+            run_command(train_command)
+            if args.register:
+                register_command = [sys.executable, os.path.join("train", "register_model.py")]
+                if args.activate:
+                    register_command.append("--activate")
+                run_command(register_command)
+            summary["skipped"] = False
+
+        with open(os.path.join(REPORT_DIR, "incremental_retrain_summary.json"), "w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+    if args.loop:
+        while True:
+            try:
+                run_once()
+            except Exception as exc:
+                print(json.dumps({"loopError": str(exc)}, ensure_ascii=False))
+            time.sleep(max(1, args.poll_interval_sec))
     else:
-        train_script = os.path.join("train", "train_baselines.py")
-        train_command = [sys.executable, train_script, "--input", args.merged_output]
-        if args.require_all:
-            train_command.append("--require-all")
-        run_command(train_command)
-        if args.register:
-            register_command = [sys.executable, os.path.join("train", "register_model.py")]
-            if args.activate:
-                register_command.append("--activate")
-            run_command(register_command)
-        summary["skipped"] = False
-
-    with open(os.path.join(REPORT_DIR, "incremental_retrain_summary.json"), "w", encoding="utf-8") as f:
-        json.dump(summary, f, ensure_ascii=False, indent=2)
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+        run_once()
 
 
 if __name__ == "__main__":

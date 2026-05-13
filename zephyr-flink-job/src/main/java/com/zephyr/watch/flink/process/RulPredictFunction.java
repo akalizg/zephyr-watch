@@ -31,11 +31,16 @@ public class RulPredictFunction extends RichMapFunction<FeatureVector, RulPredic
     @Override
     public void open(Configuration parameters) throws Exception {
         super.open(parameters);
-        File pmmlFile = resolvePmmlFile();
-        evaluator = new LoadingModelEvaluatorBuilder()
-                .load(pmmlFile)
-                .build();
-        evaluator.verify();
+        try {
+            File pmmlFile = resolvePmmlFile();
+            evaluator = new LoadingModelEvaluatorBuilder()
+                    .load(pmmlFile)
+                    .build();
+            evaluator.verify();
+        } catch (Exception e) {
+            evaluator = null;
+            System.err.println("RulPredictFunction disabled: failed to load PMML model: " + e.getMessage());
+        }
     }
 
     private File resolvePmmlFile() {
@@ -55,6 +60,10 @@ public class RulPredictFunction extends RichMapFunction<FeatureVector, RulPredic
 
     @Override
     public RulPrediction map(FeatureVector fv) throws Exception {
+        if (evaluator == null) {
+            return new RulPrediction(fv.getMachineId(), fv.getWindowEnd(), -1.0D, "UNKNOWN");
+        }
+
         Map<String, Object> arguments = new LinkedHashMap<String, Object>();
 
         // 1. 准备模型输入参数
@@ -66,13 +75,22 @@ public class RulPredictFunction extends RichMapFunction<FeatureVector, RulPredic
         }
 
         // 2. 执行 PMML 模型推理
-        Map<String, ?> results = evaluator.evaluate(arguments);
+        Double rulPrediction;
+        try {
+            Map<String, ?> results = evaluator.evaluate(arguments);
 
-        List<? extends TargetField> targetFields = evaluator.getTargetFields();
-        TargetField targetField = targetFields.get(0);
-        Object targetValue = results.get(targetField.getName());
+            List<? extends TargetField> targetFields = evaluator.getTargetFields();
+            TargetField targetField = targetFields.get(0);
+            Object targetValue = results.get(targetField.getName());
 
-        Double rulPrediction = (Double) EvaluatorUtil.decode(targetValue);
+            Object decoded = EvaluatorUtil.decode(targetValue);
+            rulPrediction = decoded instanceof Number
+                    ? ((Number) decoded).doubleValue()
+                    : Double.valueOf(String.valueOf(decoded));
+        } catch (Exception e) {
+            System.err.println("RulPredictFunction fallback: prediction failed: " + e.getMessage());
+            return new RulPrediction(fv.getMachineId(), fv.getWindowEnd(), -1.0D, "UNKNOWN");
+        }
 
         // 3. 增加风险等级判定逻辑 (用于匹配新的构造函数)
         String riskLevel = "NORMAL";

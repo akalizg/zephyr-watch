@@ -1,8 +1,11 @@
 import json
+import logging
 import os
 import subprocess
 import sys
-from typing import Any, Dict, Tuple
+import threading
+import time
+from typing import Any, Dict, Optional, Tuple
 
 import joblib
 import pandas as pd
@@ -35,6 +38,9 @@ MODEL_REGISTRY_ACTIVE_URL = os.environ.get(
     "http://localhost:8080/api/models/active",
 )
 LOAD_ACTIVE_MODEL = os.environ.get("ZEPHYR_LOAD_ACTIVE_MODEL", "false").lower() == "true"
+AUTO_RELOAD_ACTIVE_MODEL = os.environ.get("ZEPHYR_AUTO_RELOAD_ACTIVE_MODEL", "true").lower() == "true"
+ACTIVE_MODEL_POLL_SEC = float(os.environ.get("ZEPHYR_ACTIVE_MODEL_POLL_SEC", "15"))
+ACTIVE_MODEL_REQUEST_TIMEOUT_SEC = float(os.environ.get("ZEPHYR_ACTIVE_MODEL_REQUEST_TIMEOUT_SEC", "5"))
 
 MINIO_ENDPOINT = os.environ.get("ZEPHYR_MINIO_ENDPOINT", "localhost:9000")
 MINIO_ACCESS_KEY = os.environ.get("ZEPHYR_MINIO_ACCESS_KEY", "minioadmin")
@@ -63,12 +69,15 @@ FALLBACK_FEATURE_COLUMNS = [
 ]
 
 app = Flask(__name__)
+LOGGER = logging.getLogger(__name__)
 
 model = None
 threshold_config: Dict[str, Any] = {}
 feature_config: Dict[str, Any] = {}
 metadata: Dict[str, Any] = {}
 loaded_paths: Dict[str, str] = {}
+active_model_signature = ""
+state_lock = threading.RLock()
 
 
 def read_json(path: str, fallback: Dict[str, Any]) -> Dict[str, Any]:
@@ -119,7 +128,27 @@ def pick(active: Dict[str, Any], camel: str, snake: str) -> str:
     return str(value)
 
 
-def resolve_model_files() -> Dict[str, str]:
+def fetch_active_model() -> Dict[str, Any]:
+    if requests is None:
+        raise RuntimeError("requests package is required when ZEPHYR_LOAD_ACTIVE_MODEL=true")
+
+    response = requests.get(MODEL_REGISTRY_ACTIVE_URL, timeout=ACTIVE_MODEL_REQUEST_TIMEOUT_SEC)
+    response.raise_for_status()
+    return unwrap_active_response(response.json())
+
+
+def build_active_model_signature(active: Dict[str, Any]) -> str:
+    parts = [
+        pick(active, "modelVersion", "model_version"),
+        pick(active, "modelUri", "model_uri"),
+        pick(active, "thresholdUri", "threshold_uri"),
+        pick(active, "featureColumnsUri", "feature_columns_uri"),
+        pick(active, "metadataUri", "metadata_uri"),
+    ]
+    return "|".join(parts)
+
+
+def resolve_model_files(active: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
     if not LOAD_ACTIVE_MODEL:
         return {
             "model": DEFAULT_MODEL_PATH,
@@ -128,12 +157,8 @@ def resolve_model_files() -> Dict[str, str]:
             "metadata": DEFAULT_METADATA_PATH,
         }
 
-    if requests is None:
-        raise RuntimeError("requests package is required when ZEPHYR_LOAD_ACTIVE_MODEL=true")
-
-    response = requests.get(MODEL_REGISTRY_ACTIVE_URL, timeout=5)
-    response.raise_for_status()
-    active = unwrap_active_response(response.json())
+    if active is None:
+        active = fetch_active_model()
 
     return {
         "model": download_from_minio(pick(active, "modelUri", "model_uri"), os.path.join(CACHE_DIR, "best_risk_model.pkl")),
@@ -167,24 +192,35 @@ def ensure_model_file(model_path: str) -> None:
     )
 
 
-def load_model_state() -> None:
-    global model, threshold_config, feature_config, metadata, loaded_paths
+def load_model_state(active: Optional[Dict[str, Any]] = None) -> None:
+    global model, threshold_config, feature_config, metadata, loaded_paths, active_model_signature
 
-    loaded_paths = resolve_model_files()
-    ensure_model_file(loaded_paths["model"])
-    model = joblib.load(loaded_paths["model"])
-    threshold_config = read_json(
-        loaded_paths["threshold"],
+    resolved_paths = resolve_model_files(active)
+    ensure_model_file(resolved_paths["model"])
+    loaded_model = joblib.load(resolved_paths["model"])
+    loaded_threshold = read_json(
+        resolved_paths["threshold"],
         {"riskAlertThreshold": 0.7, "riskCriticalThreshold": 0.9, "selectedModel": "local-default"},
     )
-    feature_config = read_json(
-        loaded_paths["feature_columns"],
+    loaded_feature_config = read_json(
+        resolved_paths["feature_columns"],
         {"featureColumns": FALLBACK_FEATURE_COLUMNS},
     )
-    metadata = read_json(
-        loaded_paths["metadata"],
+    loaded_metadata = read_json(
+        resolved_paths["metadata"],
         {"modelVersion": "local-risk-classifier-v1", "modelType": "P1_RiskClassification"},
     )
+
+    with state_lock:
+        model = loaded_model
+        threshold_config = loaded_threshold
+        feature_config = loaded_feature_config
+        metadata = loaded_metadata
+        loaded_paths = resolved_paths
+        if active is not None:
+            active_model_signature = build_active_model_signature(active)
+        else:
+            active_model_signature = ""
 
 
 def feature_columns():
@@ -214,7 +250,13 @@ def risk_level(probability: float) -> str:
 @app.route("/api/risk/score", methods=["POST"])
 def score():
     payload = request.get_json(force=True)
-    columns = feature_columns()
+    with state_lock:
+        current_model = model
+        current_metadata = dict(metadata)
+        current_threshold_config = dict(threshold_config)
+        current_feature_config = dict(feature_config)
+
+    columns = current_feature_config.get("featureColumns") or current_feature_config.get("feature_columns") or FALLBACK_FEATURE_COLUMNS
 
     missing = [col for col in columns if col not in payload]
     if missing:
@@ -223,38 +265,55 @@ def score():
     row = {col: payload[col] for col in columns}
     df = pd.DataFrame([row], columns=columns)
 
-    if hasattr(model, "predict_proba"):
-        probability = float(model.predict_proba(df)[0][1])
+    if hasattr(current_model, "predict_proba"):
+        probability = float(current_model.predict_proba(df)[0][1])
     else:
-        probability = float(model.predict(df)[0])
+        probability = float(current_model.predict(df)[0])
 
-    threshold = risk_alert_threshold()
+    threshold = float(current_threshold_config.get("riskAlertThreshold", 0.7))
+    critical_threshold = float(current_threshold_config.get("riskCriticalThreshold", 0.9))
     label = 1 if probability >= threshold else 0
+
+    if probability >= critical_threshold:
+        level = "CRITICAL"
+    elif probability >= threshold:
+        level = "HIGH"
+    elif probability >= max(0.5, threshold * 0.7):
+        level = "MEDIUM"
+    else:
+        level = "LOW"
 
     return jsonify(
         {
             "success": True,
             "riskProbability": probability,
             "riskLabel": label,
-            "riskLevel": risk_level(probability),
+            "riskLevel": level,
             "threshold": threshold,
-            "criticalThreshold": risk_critical_threshold(),
-            "modelVersion": metadata.get("modelVersion"),
-            "selectedModel": threshold_config.get("selectedModel"),
+            "criticalThreshold": critical_threshold,
+            "modelVersion": current_metadata.get("modelVersion"),
+            "selectedModel": current_threshold_config.get("selectedModel"),
         }
     )
 
 
 @app.route("/api/risk/health", methods=["GET"])
 def health():
+    with state_lock:
+        current_paths = dict(loaded_paths)
+        current_metadata = dict(metadata)
+        current_threshold_config = dict(threshold_config)
+        current_feature_config = dict(feature_config)
+
+    columns = current_feature_config.get("featureColumns") or current_feature_config.get("feature_columns") or FALLBACK_FEATURE_COLUMNS
     return jsonify(
         {
             "success": True,
-            "modelPath": loaded_paths.get("model"),
-            "modelVersion": metadata.get("modelVersion"),
-            "threshold": risk_alert_threshold(),
-            "criticalThreshold": risk_critical_threshold(),
-            "featureColumns": feature_columns(),
+            "modelPath": current_paths.get("model"),
+            "modelVersion": current_metadata.get("modelVersion"),
+            "threshold": float(current_threshold_config.get("riskAlertThreshold", 0.7)),
+            "criticalThreshold": float(current_threshold_config.get("riskCriticalThreshold", 0.9)),
+            "featureColumns": columns,
         }
     )
 
@@ -265,7 +324,24 @@ def reload_model():
     return health()
 
 
+def active_model_watch_loop() -> None:
+    while True:
+        try:
+            active = fetch_active_model()
+            signature = build_active_model_signature(active)
+            if signature != active_model_signature:
+                LOGGER.info("Detected active model change. Reloading model state.")
+                load_model_state(active)
+        except Exception as exc:
+            LOGGER.warning("Active model watcher failed: %s", exc)
+        time.sleep(ACTIVE_MODEL_POLL_SEC)
+
+
 load_model_state()
+
+if LOAD_ACTIVE_MODEL and AUTO_RELOAD_ACTIVE_MODEL:
+    watcher = threading.Thread(target=active_model_watch_loop, name="active-model-watcher", daemon=True)
+    watcher.start()
 
 
 if __name__ == "__main__":

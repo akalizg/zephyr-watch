@@ -2,48 +2,85 @@ package com.zephyr.watch.flink.app;
 
 import com.zephyr.watch.common.constants.JobConfig;
 import com.zephyr.watch.common.constants.StorageConfig;
-import com.zephyr.watch.common.entity.*;
-import com.zephyr.watch.flink.process.*;
-import com.zephyr.watch.flink.sink.*;
+import com.zephyr.watch.common.entity.AlertEvent;
+import com.zephyr.watch.common.entity.FeatureVector;
+import com.zephyr.watch.common.entity.RiskPrediction;
+import com.zephyr.watch.common.entity.RulPrediction;
+import com.zephyr.watch.common.entity.SensorReading;
+import com.zephyr.watch.common.utils.JsonUtils;
+import com.zephyr.watch.flink.process.CepConsecutiveRiskAlertSelector;
+import com.zephyr.watch.flink.process.FeatureAnomalyAlertFunction;
+import com.zephyr.watch.flink.process.FeatureWindowProcessFunction;
+import com.zephyr.watch.flink.process.FlinkRuntimeConfigurer;
+import com.zephyr.watch.flink.process.ParseAndValidateSensorProcessFunction;
+import com.zephyr.watch.flink.process.ProcessingTimeFeatureProcessFunction;
+import com.zephyr.watch.flink.process.RestRiskPredictFunction;
+import com.zephyr.watch.flink.process.RiskThresholdAlertFunction;
+import com.zephyr.watch.flink.process.RulPredictFunction;
+import com.zephyr.watch.flink.sink.KafkaJsonSinkFactory;
+import com.zephyr.watch.flink.sink.MySqlSinkFactory;
+import com.zephyr.watch.flink.sink.RiskRedisMapper;
+import com.zephyr.watch.flink.sink.RulRedisMapper;
+import com.zephyr.watch.flink.sink.WebhookAlertSink;
 import com.zephyr.watch.flink.source.SensorKafkaSourceFactory;
+import java.time.Duration;
+import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.cep.CEP;
-import org.apache.flink.cep.PatternStream;
 import org.apache.flink.cep.pattern.Pattern;
 import org.apache.flink.cep.pattern.conditions.SimpleCondition;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.SlidingProcessingTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.windowing.triggers.ProcessingTimeTrigger;
 import org.apache.flink.streaming.connectors.redis.RedisSink;
 import org.apache.flink.streaming.connectors.redis.common.config.FlinkJedisPoolConfig;
 
-import java.time.Duration;
-
-/**
- * 修复版在线推理作业
- * 解决了水位线推进不及时和调试信息缺失导致 Redis 为空的问题
- */
 public class OnlineInferenceJob {
 
     public static void main(String[] args) throws Exception {
-        // 1. 初始化环境与配置参数
         String pmmlPath = args.length > 0 ? args[0] : JobConfig.DEFAULT_PMML_MODEL_PATH;
         String modelVersion = args.length > 1 ? args[1] : JobConfig.DEFAULT_MODEL_VERSION;
-
-        // 强制开启调试打印，确保能看到数据流转
         boolean debugPrint = true;
 
         String modelServiceUrl = args.length > 3
                 ? args[3]
                 : System.getenv().getOrDefault("ZEPHYR_MODEL_SERVICE_URL", "http://localhost:5001/api/risk/score");
+        boolean eventTimeWindows = useEventTimeWindows();
+        boolean tumblingProcessingWindow = useTumblingProcessingWindow();
+        int featureWindowSeconds = envInt("ZEPHYR_FEATURE_WINDOW_SECONDS", JobConfig.FEATURE_WINDOW_SECONDS);
+        int featureWindowSlideSeconds = envInt("ZEPHYR_FEATURE_WINDOW_SLIDE_SECONDS", JobConfig.FEATURE_WINDOW_SLIDE_SECONDS);
+        boolean featureOnlyDebug = "true".equalsIgnoreCase(
+                System.getenv().getOrDefault("ZEPHYR_FEATURE_ONLY_DEBUG", "false")
+        );
+        boolean enableLocalRul = envBool("ZEPHYR_ENABLE_LOCAL_RUL", true);
+        boolean enableFeatureSnapshotSink = envBool("ZEPHYR_ENABLE_FEATURE_SNAPSHOT_SINK", true);
+        boolean enableRedisSink = envBool("ZEPHYR_ENABLE_REDIS_SINK", true);
+        boolean enableKafkaOutputSink = envBool("ZEPHYR_ENABLE_KAFKA_OUTPUT_SINK", true);
+        boolean enableAlertPipeline = envBool("ZEPHYR_ENABLE_ALERT_PIPELINE", true);
+
+        System.out.println("ZEPHYR_ONLINE_WINDOW_TIME_MODE="
+                + (eventTimeWindows ? "event" : "processing")
+                + ", featureWindowSeconds=" + featureWindowSeconds
+                + ", featureWindowSlideSeconds=" + featureWindowSlideSeconds
+                + ", tumblingProcessingWindow=" + tumblingProcessingWindow
+                + ", featureOnlyDebug=" + featureOnlyDebug
+                + ", enableLocalRul=" + enableLocalRul
+                + ", enableFeatureSnapshotSink=" + enableFeatureSnapshotSink
+                + ", enableRedisSink=" + enableRedisSink
+                + ", enableKafkaOutputSink=" + enableKafkaOutputSink
+                + ", enableAlertPipeline=" + enableAlertPipeline);
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        // 配置 Checkpoint 和状态后端
         FlinkRuntimeConfigurer.configureReliableStreaming(env);
+        // Keep debug/verification operators from being blocked by slow external sink initialization.
+        env.disableOperatorChaining();
 
-        // 2. 数据接入 (Source)
         DataStream<String> kafkaRawStream = env.fromSource(
                 SensorKafkaSourceFactory.buildOnlineInferenceSource(),
                 WatermarkStrategy.noWatermarks(),
@@ -51,87 +88,207 @@ public class OnlineInferenceJob {
         );
 
         if (debugPrint) {
-            kafkaRawStream.print("STEP1-KAFKA-RAW"); // 调试点1：看 Kafka 是否连通
+            kafkaRawStream.print("STEP1-KAFKA-RAW");
         }
 
-        // 3. 数据解析、清洗与水位线分配 (Parse & Watermark)
         SingleOutputStreamOperator<SensorReading> cleanStream = kafkaRawStream
                 .process(new ParseAndValidateSensorProcessFunction())
                 .name("Parse_And_Validate_Sensor")
-                // 核心修复：更健壮的水位线策略
                 .assignTimestampsAndWatermarks(
                         WatermarkStrategy.<SensorReading>forBoundedOutOfOrderness(Duration.ofSeconds(10))
                                 .withTimestampAssigner((event, timestamp) -> event.getEventTime())
-                                .withIdleness(Duration.ofMinutes(1)) // 关键：处理空闲分区
+                                .withIdleness(Duration.ofMinutes(1))
                 );
 
         if (debugPrint) {
-            cleanStream.print("STEP2-CLEAN-DATA"); // 调试点2：看 JSON 解析是否正确
+            cleanStream.print("STEP2-CLEAN-DATA");
         }
 
-        // 4. 特征工程 (Sliding Window)
-        SingleOutputStreamOperator<FeatureVector> featureStream = cleanStream
-                .keyBy(SensorReading::getMachineId)
-                .window(SlidingEventTimeWindows.of(
-                        Time.seconds(JobConfig.FEATURE_WINDOW_SECONDS),
-                        Time.seconds(JobConfig.FEATURE_WINDOW_SLIDE_SECONDS)
-                ))
-                .process(new FeatureWindowProcessFunction())
-                .name("Sliding_Window_Feature_Engineering");
+        SingleOutputStreamOperator<SensorReading> windowInputStream = cleanStream
+                .filter(new ValidSensorReadingFilter())
+                .name("Filter_Valid_Window_Input");
 
         if (debugPrint) {
-            featureStream.print("STEP3-FEATURE-VECTOR"); // 调试点3：看窗口是否触发
+            windowInputStream.print("STEP2B-WINDOW-INPUT");
         }
 
-        // 5. 实时推理 (Risk & RUL Prediction)
+        SingleOutputStreamOperator<FeatureVector> featureStream;
+        if (eventTimeWindows) {
+            featureStream = windowInputStream
+                    .keyBy(SensorReading::getMachineId)
+                    .window(SlidingEventTimeWindows.of(
+                            Time.seconds(featureWindowSeconds),
+                            Time.seconds(featureWindowSlideSeconds)
+                    ))
+                    .process(new FeatureWindowProcessFunction())
+                    .name("Sliding_Event_Time_Window_Feature_Engineering");
+        } else {
+            featureStream = windowInputStream
+                    .keyBy(SensorReading::getMachineId)
+                    .process(new ProcessingTimeFeatureProcessFunction(
+                            featureWindowSeconds,
+                            featureWindowSlideSeconds
+                    ))
+                    .name("Processing_Time_Feature_Engineering");
+        }
+
+        if (debugPrint) {
+            featureStream.print("STEP3-FEATURE-VECTOR");
+        }
+
+        if (featureOnlyDebug) {
+            env.execute(JobConfig.ONLINE_INFERENCE_JOB_NAME + " Feature Debug");
+            return;
+        }
+
+        if (enableFeatureSnapshotSink) {
+            featureStream.addSink(MySqlSinkFactory.buildFeatureSnapshotSink()).name("MySQL_Feature_Snapshot_Sink");
+        }
+
         SingleOutputStreamOperator<RiskPrediction> riskStream = featureStream
-                .map(new RestRiskPredictFunction(pmmlPath, modelServiceUrl, modelVersion))
+                .map(new RestRiskPredictFunction(modelServiceUrl, modelVersion))
                 .name("REST_Risk_Classification_Inference");
 
-        SingleOutputStreamOperator<RulPrediction> rulStream = featureStream
-                .map(new RulPredictFunction(pmmlPath))
-                .name("RUL_Remaining_Life_Inference");
-
-        if (debugPrint) {
-            riskStream.print("STEP4-RISK-RESULT"); // 调试点4：看风险推理输出
-            rulStream.print("STEP5-RUL-RESULT");   // 调试点5：看寿命推理输出
+        SingleOutputStreamOperator<RulPrediction> rulStream = null;
+        if (enableLocalRul) {
+            rulStream = featureStream
+                    .map(new RulPredictFunction(pmmlPath))
+                    .name("RUL_Remaining_Life_Inference");
         }
 
-        // 6. Redis 实时写入
-        FlinkJedisPoolConfig redisConfig = new FlinkJedisPoolConfig.Builder()
-                .setHost(StorageConfig.REDIS_HOST)
-                .setPort(StorageConfig.REDIS_PORT)
-                .build();
+        if (debugPrint) {
+            riskStream.print("STEP4-RISK-RESULT");
+            if (rulStream != null) {
+                rulStream.print("STEP5-RUL-RESULT");
+            }
+        }
 
-        riskStream.addSink(new RedisSink<>(redisConfig, new RiskRedisMapper())).name("Redis_Risk_Sink");
-        rulStream.addSink(new RedisSink<>(redisConfig, new RulRedisMapper())).name("Redis_Rul_Sink");
+        if (enableRedisSink) {
+            FlinkJedisPoolConfig redisConfig = new FlinkJedisPoolConfig.Builder()
+                    .setHost(StorageConfig.REDIS_HOST)
+                    .setPort(StorageConfig.REDIS_PORT)
+                    .build();
 
-        // 7. MySQL 分发
+            riskStream.addSink(new RedisSink<>(redisConfig, new RiskRedisMapper())).name("Redis_Risk_Sink");
+            if (rulStream != null) {
+                rulStream.addSink(new RedisSink<>(redisConfig, new RulRedisMapper())).name("Redis_Rul_Sink");
+            }
+        }
+
         riskStream.addSink(MySqlSinkFactory.buildRiskPredictionSink()).name("MySQL_Risk_Prediction_Sink");
 
-        // 8. 复杂事件处理 (CEP) - 连续高风险告警
-        Pattern<RiskPrediction, ?> consecutiveRiskPattern = Pattern
-                .<RiskPrediction>begin("first")
-                .where(new SimpleCondition<RiskPrediction>() {
-                    @Override
-                    public boolean filter(RiskPrediction value) {
-                        return value.getRiskLabel() != null && value.getRiskLabel() == 1;
-                    }
-                })
-                .next("second")
-                .where(new SimpleCondition<RiskPrediction>() {
-                    @Override
-                    public boolean filter(RiskPrediction value) {
-                        return value.getRiskLabel() != null && value.getRiskLabel() == 1;
-                    }
-                })
-                .within(Time.minutes(2));
+        if (enableKafkaOutputSink) {
+            riskStream
+                    .map(new MapFunction<RiskPrediction, String>() {
+                        @Override
+                        public String map(RiskPrediction value) {
+                            return JsonUtils.toJsonString(value);
+                        }
+                    })
+                    .sinkTo(KafkaJsonSinkFactory.buildRiskPredictionSink())
+                    .name("Kafka_Risk_Prediction_Sink");
+        }
 
-        CEP.pattern(riskStream.keyBy(RiskPrediction::getMachineId), consecutiveRiskPattern)
-                .select(new CepConsecutiveRiskAlertSelector())
-                .addSink(MySqlSinkFactory.buildAlertEventSink())
-                .name("CEP_High_Risk_Alert_Sink");
+        if (enableAlertPipeline) {
+            SingleOutputStreamOperator<AlertEvent> thresholdAlertStream = riskStream
+                    .flatMap(new RiskThresholdAlertFunction())
+                    .name("Risk_Threshold_Alert");
+
+            SingleOutputStreamOperator<AlertEvent> featureAlertStream = riskStream
+                    .flatMap(new FeatureAnomalyAlertFunction())
+                    .name("Feature_Anomaly_Alert");
+
+            Pattern<RiskPrediction, ?> consecutiveRiskPattern = Pattern
+                    .<RiskPrediction>begin("first")
+                    .where(new SimpleCondition<RiskPrediction>() {
+                        @Override
+                        public boolean filter(RiskPrediction value) {
+                            return value.getRiskLabel() != null && value.getRiskLabel() == 1;
+                        }
+                    })
+                    .next("second")
+                    .where(new SimpleCondition<RiskPrediction>() {
+                        @Override
+                        public boolean filter(RiskPrediction value) {
+                            return value.getRiskLabel() != null && value.getRiskLabel() == 1;
+                        }
+                    })
+                    .within(Time.minutes(2));
+
+            SingleOutputStreamOperator<AlertEvent> cepAlertStream = CEP
+                    .pattern(riskStream.keyBy(RiskPrediction::getMachineId), consecutiveRiskPattern)
+                    .select(new CepConsecutiveRiskAlertSelector())
+                    .name("CEP_High_Risk_Alert");
+
+            DataStream<AlertEvent> alertStream = thresholdAlertStream
+                    .union(featureAlertStream)
+                    .union(cepAlertStream);
+
+            if (debugPrint) {
+                alertStream.print("STEP6-ALERT-EVENT");
+            }
+
+            alertStream.addSink(MySqlSinkFactory.buildAlertEventSink()).name("MySQL_Alert_Event_Sink");
+            if (enableKafkaOutputSink) {
+                alertStream
+                        .map(new MapFunction<AlertEvent, String>() {
+                            @Override
+                            public String map(AlertEvent value) {
+                                return JsonUtils.toJsonString(value);
+                            }
+                        })
+                        .sinkTo(KafkaJsonSinkFactory.buildAlertEventSink())
+                        .name("Kafka_Alert_Event_Sink");
+            }
+            alertStream.addSink(new WebhookAlertSink()).name("Webhook_Alert_Sink");
+        }
 
         env.execute(JobConfig.ONLINE_INFERENCE_JOB_NAME);
+    }
+
+    private static boolean useEventTimeWindows() {
+        String mode = System.getenv().getOrDefault("ZEPHYR_ONLINE_WINDOW_TIME_MODE", "processing");
+        return "event".equalsIgnoreCase(mode) || "event-time".equalsIgnoreCase(mode);
+    }
+
+    private static boolean useTumblingProcessingWindow() {
+        String mode = System.getenv().getOrDefault("ZEPHYR_PROCESSING_WINDOW_KIND", "tumbling");
+        return "tumbling".equalsIgnoreCase(mode);
+    }
+
+    private static int envInt(String name, int defaultValue) {
+        String value = System.getenv(name);
+        if (value == null || value.trim().isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            int parsed = Integer.parseInt(value.trim());
+            return parsed > 0 ? parsed : defaultValue;
+        } catch (NumberFormatException ignored) {
+            return defaultValue;
+        }
+    }
+
+    private static boolean envBool(String name, boolean defaultValue) {
+        String value = System.getenv(name);
+        if (value == null || value.trim().isEmpty()) {
+            return defaultValue;
+        }
+        return "true".equalsIgnoreCase(value.trim())
+                || "1".equals(value.trim())
+                || "yes".equalsIgnoreCase(value.trim());
+    }
+
+    private static class ValidSensorReadingFilter implements FilterFunction<SensorReading> {
+        @Override
+        public boolean filter(SensorReading value) {
+            return value != null
+                    && value.getMachineId() != null
+                    && value.getCycle() != null
+                    && value.getPressure() != null
+                    && value.getTemperature() != null
+                    && value.getSpeed() != null
+                    && value.getEventTime() != null;
+        }
     }
 }

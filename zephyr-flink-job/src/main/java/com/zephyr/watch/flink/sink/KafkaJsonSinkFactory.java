@@ -24,14 +24,37 @@ public final class KafkaJsonSinkFactory {
     }
 
     private static KafkaSink<String> build(String topic, String transactionalIdPrefix) {
+        DeliveryGuarantee guarantee = deliveryGuarantee();
+        if (guarantee == DeliveryGuarantee.EXACTLY_ONCE) {
+            return KafkaSink.<String>builder()
+                .setBootstrapServers(KafkaConfig.BOOTSTRAP_SERVERS)
+                .setRecordSerializer(KafkaRecordSerializationSchema.builder()
+                    .setTopic(topic)
+                    .setValueSerializationSchema(new SimpleStringSchema())
+                    .build())
+                .setDeliverGuarantee(guarantee)
+                .setTransactionalIdPrefix(transactionalIdPrefix)
+                .build();
+        }
+
         return KafkaSink.<String>builder()
             .setBootstrapServers(KafkaConfig.BOOTSTRAP_SERVERS)
             .setRecordSerializer(KafkaRecordSerializationSchema.builder()
                 .setTopic(topic)
                 .setValueSerializationSchema(new SimpleStringSchema())
                 .build())
-            .setDeliverGuarantee(DeliveryGuarantee.EXACTLY_ONCE)
-            .setTransactionalIdPrefix(transactionalIdPrefix)
+            .setDeliverGuarantee(guarantee)
             .build();
+    }
+
+    private static DeliveryGuarantee deliveryGuarantee() {
+        String mode = System.getenv().getOrDefault("ZEPHYR_KAFKA_SINK_GUARANTEE", "at-least-once");
+        if ("exactly-once".equalsIgnoreCase(mode) || "exactly_once".equalsIgnoreCase(mode)) {
+            return DeliveryGuarantee.EXACTLY_ONCE;
+        }
+        if ("none".equalsIgnoreCase(mode)) {
+            return DeliveryGuarantee.NONE;
+        }
+        return DeliveryGuarantee.AT_LEAST_ONCE;
     }
 }

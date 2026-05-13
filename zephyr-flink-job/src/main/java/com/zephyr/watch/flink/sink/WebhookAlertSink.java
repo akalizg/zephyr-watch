@@ -47,7 +47,12 @@ public class WebhookAlertSink extends RichSinkFunction<AlertEvent> {
             if (!isAllowedByRiskLevel(value.getRiskLevel(), target.minRiskLevel)) {
                 continue;
             }
-            post(target.webhookUrl, payload);
+            try {
+                post(target.webhookUrl, payload);
+            } catch (Exception e) {
+                System.err.println("WebhookAlertSink skipped failed target " + target.webhookUrl
+                        + ": " + e.getMessage());
+            }
         }
     }
 
@@ -73,9 +78,8 @@ public class WebhookAlertSink extends RichSinkFunction<AlertEvent> {
                 }
             }
         } catch (Exception e) {
-            if (loaded.isEmpty()) {
-                throw new IllegalStateException("Failed to load webhook_config from MySQL", e);
-            }
+            System.err.println("WebhookAlertSink disabled: failed to load webhook_config from MySQL: "
+                    + e.getMessage());
         }
         return loaded;
     }

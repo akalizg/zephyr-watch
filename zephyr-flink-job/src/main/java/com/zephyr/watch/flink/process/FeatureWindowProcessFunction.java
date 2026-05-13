@@ -91,6 +91,11 @@ public class FeatureWindowProcessFunction
             return;
         }
 
+        System.out.println("FEATURE-WINDOW-TRIGGER machineId=" + machineId
+                + ", windowStart=" + context.window().getStart()
+                + ", windowEnd=" + context.window().getEnd()
+                + ", sampleCount=" + count);
+
         double pressureAvg = pressureSum / count;
         double temperatureAvg = temperatureSum / count;
         double speedAvg = speedSum / count;

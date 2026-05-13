@@ -48,17 +48,29 @@ public class RestRiskPredictFunction extends RichMapFunction<FeatureVector, Risk
             rul = rulPrediction.getRul();
         }
 
-        JSONObject response = JSON.parseObject(postJson(modelServiceUrl, buildRequestJson(fv)));
-        if (!response.getBooleanValue("success")) {
-            throw new IllegalStateException("risk model service returned failure: " + response);
-        }
+        double riskProbability;
+        int riskLabel;
+        String riskLevel;
+        String modelVersion;
+        try {
+            JSONObject response = JSON.parseObject(postJson(modelServiceUrl, buildRequestJson(fv)));
+            if (!response.getBooleanValue("success")) {
+                throw new IllegalStateException("risk model service returned failure: " + response);
+            }
 
-        double riskProbability = response.getDoubleValue("riskProbability");
-        int riskLabel = response.getIntValue("riskLabel");
-        String riskLevel = response.getString("riskLevel");
-        String modelVersion = response.getString("modelVersion");
-        if (modelVersion == null || modelVersion.trim().isEmpty()) {
-            modelVersion = defaultModelVersion;
+            riskProbability = response.getDoubleValue("riskProbability");
+            riskLabel = response.getIntValue("riskLabel");
+            riskLevel = response.getString("riskLevel");
+            modelVersion = response.getString("modelVersion");
+            if (modelVersion == null || modelVersion.trim().isEmpty()) {
+                modelVersion = defaultModelVersion;
+            }
+        } catch (Exception e) {
+            riskProbability = fallbackRiskProbability(fv);
+            riskLabel = riskProbability >= 0.70D ? 1 : 0;
+            riskLevel = riskProbability >= 0.90D ? "CRITICAL" : (riskProbability >= 0.70D ? "HIGH" : "LOW");
+            modelVersion = defaultModelVersion + "-fallback";
+            System.err.println("RestRiskPredictFunction fallback: " + e.getMessage());
         }
 
         String predictionId = String.format(
@@ -163,5 +175,20 @@ public class RestRiskPredictFunction extends RichMapFunction<FeatureVector, Risk
             }
         }
         return builder.toString();
+    }
+
+    private double fallbackRiskProbability(FeatureVector fv) {
+        double temperatureSignal = normalize(fv.getTemperatureAvg(), 1580.0D, 1610.0D);
+        double speedTrendSignal = normalize(Math.abs(fv.getSpeedTrend()), 0.0D, 25.0D);
+        double pressureStdSignal = normalize(fv.getPressureStd(), 0.0D, 1.0D);
+        double probability = temperatureSignal * 0.50D + speedTrendSignal * 0.30D + pressureStdSignal * 0.20D;
+        return Math.max(0.0D, Math.min(1.0D, probability));
+    }
+
+    private double normalize(double value, double min, double max) {
+        if (max <= min) {
+            return 0.0D;
+        }
+        return Math.max(0.0D, Math.min(1.0D, (value - min) / (max - min)));
     }
 }

@@ -65,16 +65,33 @@ public class AlertReviewJob {
                     "pressure_min, pressure_max, pressure_avg, pressure_std, pressure_trend, " +
                     "temperature_min, temperature_max, temperature_avg, temperature_std, temperature_trend, " +
                     "speed_min, speed_max, speed_avg, speed_std, speed_trend, rul, risk_label, review_label, reviewer) " +
-                    "SELECT ?, fs.machine_id, fs.window_start, fs.window_end, fs.sample_count, " +
-                    "fs.cycle_start, fs.cycle_end, fs.pressure_min, fs.pressure_max, fs.pressure_avg, " +
-                    "fs.pressure_std, fs.pressure_trend, fs.temperature_min, fs.temperature_max, " +
-                    "fs.temperature_avg, fs.temperature_std, fs.temperature_trend, fs.speed_min, " +
-                    "fs.speed_max, fs.speed_avg, fs.speed_std, fs.speed_trend, drp.rul, ?, ?, ? " +
+                    "SELECT ?, drp.machine_id, " +
+                    "COALESCE(fs.window_start, drp.window_start), " +
+                    "COALESCE(fs.window_end, drp.window_end), " +
+                    "COALESCE(fs.sample_count, drp.sample_count), " +
+                    "COALESCE(fs.cycle_start, drp.cycle_start), " +
+                    "COALESCE(fs.cycle_end, drp.cycle_end), " +
+                    "COALESCE(fs.pressure_min, drp.pressure_min), " +
+                    "COALESCE(fs.pressure_max, drp.pressure_max), " +
+                    "COALESCE(fs.pressure_avg, drp.pressure_avg), " +
+                    "COALESCE(fs.pressure_std, drp.pressure_std), " +
+                    "COALESCE(fs.pressure_trend, drp.pressure_trend), " +
+                    "COALESCE(fs.temperature_min, drp.temperature_min), " +
+                    "COALESCE(fs.temperature_max, drp.temperature_max), " +
+                    "COALESCE(fs.temperature_avg, drp.temperature_avg), " +
+                    "COALESCE(fs.temperature_std, drp.temperature_std), " +
+                    "COALESCE(fs.temperature_trend, drp.temperature_trend), " +
+                    "COALESCE(fs.speed_min, drp.speed_min), " +
+                    "COALESCE(fs.speed_max, drp.speed_max), " +
+                    "COALESCE(fs.speed_avg, drp.speed_avg), " +
+                    "COALESCE(fs.speed_std, drp.speed_std), " +
+                    "COALESCE(fs.speed_trend, drp.speed_trend), " +
+                    "drp.rul, ?, ?, ? " +
                     "FROM alert_event ae " +
-                    "JOIN online_feature_snapshot fs ON fs.machine_id = ae.machine_id " +
-                    "LEFT JOIN device_risk_prediction drp ON drp.machine_id = ae.machine_id AND drp.window_end = fs.window_end " +
+                    "JOIN device_risk_prediction drp ON drp.machine_id = ae.machine_id " +
+                    "LEFT JOIN online_feature_snapshot fs ON fs.machine_id = drp.machine_id AND fs.window_end = drp.window_end " +
                     "WHERE ae.alert_id = ? " +
-                    "ORDER BY ABS(ae.event_time - fs.window_end) ASC LIMIT 1 " +
+                    "ORDER BY ABS(ae.event_time - drp.window_end) ASC LIMIT 1 " +
                     "ON DUPLICATE KEY UPDATE " +
                     "machine_id = VALUES(machine_id), window_start = VALUES(window_start), window_end = VALUES(window_end), " +
                     "sample_count = VALUES(sample_count), cycle_start = VALUES(cycle_start), cycle_end = VALUES(cycle_end), " +

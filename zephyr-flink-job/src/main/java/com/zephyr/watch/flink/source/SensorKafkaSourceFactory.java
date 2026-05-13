@@ -31,7 +31,11 @@ public final class SensorKafkaSourceFactory {
                 .setStartingOffsets(OffsetsInitializer.latest())
                 .setValueOnlyDeserializer(new SimpleStringSchema())
                 // 修复3：针对 Kafka 2.4.1 可能需要的属性配置
-                .setProperty("partition.discovery.interval.ms", "10000")
+                .setProperty("partition.discovery.interval.ms", "-1")
+                .setProperty("request.timeout.ms", "120000")
+                .setProperty("default.api.timeout.ms", "120000")
+                .setProperty("metadata.max.age.ms", "300000")
+                .setProperty("connections.max.idle.ms", "300000")
                 .build();
     }
 
