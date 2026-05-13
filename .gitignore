@@ -1,4 +1,5 @@
 venv/ 
+.venv/
 *.exe 
 *.dll 
 *.so 
@@ -8,3 +9,8 @@ venv/
 *.iml 
 __pycache__/ 
 *.pyc 
+target/
+**/target/
+.env
+.env.*
+!.env.example
