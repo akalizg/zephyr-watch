@@ -23,3 +23,4 @@ zephyr-ml/data/review_labels.csv
 zephyr-ml/data/normalized_feedback_samples.csv
 zephyr-ml/data/merged_train_dataset.csv
 zephyr-ml/reports/incremental_retrain_summary.json
+docs/branch-b-extension-workplan.md
