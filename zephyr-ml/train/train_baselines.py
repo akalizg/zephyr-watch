@@ -89,6 +89,17 @@ def build_models(random_state: int) -> Dict[str, Any]:
     return models
 
 
+# [新增] 构建无监督异常检测模型
+def build_anomaly_models(random_state: int) -> Dict[str, Any]:
+    return {
+        "isolation_forest": IsolationForest(random_state=random_state, contamination="auto"),
+        "one_class_svm": Pipeline([
+            ("scaler", StandardScaler()),
+            ("svm", OneClassSVM(nu=0.05, kernel="rbf", gamma="scale"))
+        ])
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
@@ -130,6 +141,7 @@ def main():
         auc = average_precision_score(y_test, y_prob)
         metrics_list.append({
             "model": name,
+            "type": "supervised",  # [修改] 增加类型标识
             "precision": float(precision_score(y_test, y_pred, zero_division=0)),
             "recall": float(recall_score(y_test, y_pred, zero_division=0)),
             "f1": float(f1_score(y_test, y_pred, zero_division=0)),
@@ -142,6 +154,45 @@ def main():
             best_name = name
 
         joblib.dump(model, os.path.join(args.artifact_dir, f"{name}.pkl"))
+
+    # [新增] 将表现最好的监督模型持久化为标准名称，供线上调用
+    if best_model_obj:
+        joblib.dump(best_model_obj, os.path.join(args.artifact_dir, "best_risk_model.pkl"))
+
+    # [新增] 2. 训练与评估无监督异常检测模型
+    print("-" * 30)
+    anomaly_models = build_anomaly_models(42)
+    best_anomaly_auc = -1
+    best_anomaly_model_obj = None
+
+    for name, model in anomaly_models.items():
+        print(f"[INFO] Training Anomaly Model: {name}...")
+        model.fit(x_train)  # 无监督仅利用特征
+
+        # 异常得分：值越大越异常
+        y_scores = -model.decision_function(x_test)
+        auc = average_precision_score(y_test, y_scores)
+
+        metrics_list.append({
+            "model": name,
+            "type": "unsupervised",
+            "precision": 0.0, "recall": 0.0, "f1": 0.0,
+            "pr_auc": float(auc)
+        })
+
+        if auc > best_anomaly_auc:
+            best_anomaly_auc = auc
+            best_anomaly_model_obj = model
+
+        joblib.dump(model, os.path.join(args.artifact_dir, f"{name}.pkl"))
+
+    if best_anomaly_model_obj:
+        joblib.dump(best_anomaly_model_obj, os.path.join(args.artifact_dir, "best_anomaly_model.pkl"))
+
+    # [新增] 持久化 SHAP Background 数据供在线接口初始化解释器使用
+    print("[INFO] Saving SHAP background dataset...")
+    background_data = x_train.sample(min(100, len(x_train)), random_state=42)
+    joblib.dump(background_data, os.path.join(args.artifact_dir, "shap_background.pkl"))
 
     # 图表 2: 各模型 PR 曲线对比图
     plt.figure(figsize=(10, 6))
@@ -192,8 +243,8 @@ def main():
     if shap:
         print("[INFO] Generating SHAP summary...")
         try:
-            # 简化版 SHAP (采样 100 条防止计算过慢)
-            explainer = shap.Explainer(best_model_obj.predict, x_test.sample(min(100, len(x_test))))
+            # 简化版 SHAP (采样 100 条防止计算过慢)，[修改] 使用固定的 background_data
+            explainer = shap.Explainer(best_model_obj.predict, background_data)
             shap_values = explainer(x_test.sample(min(100, len(x_test))))
             plt.figure()
             shap.summary_plot(shap_values, x_test.sample(min(100, len(x_test))), show=False)
@@ -208,7 +259,7 @@ def main():
     df_report.to_csv(report_path, index=False)
 
     print("-" * 30)
-    print(f"[SUCCESS] 报告与所有 6 张可视化图表已生成在: {args.report_dir}")
+    print(f"[SUCCESS] 报告与所有可视化图表已生成在: {args.report_dir}")
 
 
 if __name__ == "__main__":
