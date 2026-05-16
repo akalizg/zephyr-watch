@@ -2,12 +2,22 @@ apiVersion: 1
 
 datasources:
   - name: ZephyrMySQL
+    uid: ZephyrMySQL
     type: mysql
     access: proxy
-    url: ${ZEPHYR_GRAFANA_MYSQL_URL:host.docker.internal:3306}
-    database: ${ZEPHYR_GRAFANA_MYSQL_DATABASE:zephyr_watch}
-    user: ${ZEPHYR_GRAFANA_MYSQL_USER:root}
+    # Do NOT use ${VAR:default} for user/password/database — Grafana provisioning env expansion
+    # can mis-parse the colon and end up with empty user + no password (MySQL: ''@'localhost' using password: NO).
+    # Use a single host:port string WITHOUT ${VAR:host:port} in url — colons break host:port parsing.
+    #
+    # Docker Desktop（Windows/Mac）：用 host.docker.internal 指向宿主机上的 MySQL（不要用 127.0.0.1）。
+    # Linux 原生 Docker：若解析失败，启动 Grafana 时加 --add-host=host.docker.internal:host-gateway，
+    # 或把 url 改为 docker0 网关 IP（常见 172.17.0.1:3306）。详见 zephyr-dashboard/README.md §2.1.1、§3。
+    url: host.docker.internal:3306
+    # Values from container env (set via docker-compose env_file → repo-root .env). Do not use ${VAR:default}
+    # here — colons break provisioning parsing for these fields.
+    database: ${ZEPHYR_GRAFANA_MYSQL_DATABASE}
+    user: ${ZEPHYR_GRAFANA_MYSQL_USER}
     secureJsonData:
-      password: ${ZEPHYR_GRAFANA_MYSQL_PASSWORD:your_password}
+      password: ${ZEPHYR_GRAFANA_MYSQL_PASSWORD}
     jsonData:
       tlsSkipVerify: true

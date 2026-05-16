@@ -1,20 +1,41 @@
+# Zephyr-Watch Task C — Prometheus scrape entry points.
+# Adjust static_configs.targets to match where each exporter actually runs
+# (Docker Desktop → host.docker.internal; Linux VM → 192.168.x.x; all local → 127.0.0.1).
+# After edits: reload or restart Prometheus, then check Status → Targets (expect UP for running exporters).
+
 global:
   scrape_interval: 15s
+  scrape_timeout: 12s
+  evaluation_interval: 15s
 
 scrape_configs:
+  # Spring Boot 2.7 + Micrometer: JVM / process / HTTP metrics (see exporter-notes/README.md).
   - job_name: "zephyr-api"
     metrics_path: "/actuator/prometheus"
+    scheme: http
     static_configs:
       - targets: ["host.docker.internal:8080"]
 
+  # --- Optional: expect DOWN / "connection refused" unless the exporter is running on the host. ---
+  # Flink 1.15: enable Prometheus reporter in flink-conf.yaml (default port often 9249 on JM host).
   - job_name: "flink"
+    metrics_path: "/"
+    scheme: http
     static_configs:
       - targets: ["host.docker.internal:9249"]
 
+  # Optional — kafka_exporter (or JMX sidecar) on 9308; else DOWN is normal.
+  # Kafka: JMX exporter or kafka_exporter (example port 9308). Deploy on broker host.
   - job_name: "kafka"
+    metrics_path: "/metrics"
+    scheme: http
     static_configs:
       - targets: ["host.docker.internal:9308"]
 
+  # Optional — node_exporter on 9100 (often Linux); Windows labs may leave DOWN or point to a VM.
+  # node_exporter host metrics (Linux). On Windows labs, point to VM IP or disable job if unused.
   - job_name: "node"
+    metrics_path: "/metrics"
+    scheme: http
     static_configs:
       - targets: ["host.docker.internal:9100"]

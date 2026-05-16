@@ -2,7 +2,9 @@ apiVersion: 1
 
 datasources:
   - name: ZephyrPrometheus
+    uid: ZephyrPrometheus
     type: prometheus
     access: proxy
-    url: ${ZEPHYR_GRAFANA_PROMETHEUS_URL:http://prometheus:9090}
+    # Do not use ${VAR:http://host:port} — colons break Grafana default parsing → empty URL / Explore errors.
+    url: http://host.docker.internal:9090
     isDefault: false

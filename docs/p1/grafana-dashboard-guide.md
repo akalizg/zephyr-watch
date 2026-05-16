@@ -140,8 +140,19 @@ ORDER BY label_count DESC;
 5. 如果维修工单为空，确认 RecommendJob 已启动并消费 `alert_event` Topic。
 6. 如果人工审核标签为空，确认审核接口或 `review_label_topic` 消息已写入。
 7. Grafana 查询使用时间过滤时，注意 `window_end` 和 `event_time` 是毫秒时间戳，SQL 中需要除以 1000 后转成 MySQL 时间。
-8. 当前文档不覆盖 Prometheus/Flink/Kafka/JVM 全链路系统监控；如果系统指标面板为空，应检查 Prometheus 后续扩展配置，而不是把它作为本业务看板的验收前提。
+8. **业务看板**以 MySQL 为准；**系统指标**由 Prometheus 大盘承担（见 `zephyr-dashboard/grafana/dashboards/zephyr-watch-system.json` 与 `docs/c-observability.md`）。若系统面板无数据，请先检查 Prometheus Targets 与 exporter 是否部署，而不是作为 MySQL 业务 SQL 的验收前提。
 
 ## 导入业务 Dashboard JSON
 
-Grafana 页面选择 `Dashboards -> New -> Import`，上传 `zephyr-dashboard/grafana/zephyr-watch-business-dashboard.json`，并在导入时将 `${DS_MYSQL}` 绑定到当前 MySQL 数据源即可。
+在 Grafana 中选择 **Dashboards → Import**，上传：
+
+- `zephyr-dashboard/grafana/dashboards/zephyr-watch-business.json`
+
+导入时数据源应选择 **uid 为 `ZephyrMySQL`** 的预置数据源（见 `grafana/provisioning/datasources/mysql.yml`）。若使用旧路径 `zephyr-watch-business-dashboard.json`，请以 `dashboards` 目录下 JSON 为准。
+
+## 导入系统（Prometheus）Dashboard JSON
+
+1. 先按 `zephyr-dashboard/README.md` 启动 Prometheus，并确认 **Targets** 中 `zephyr-api` 等为 **UP**。
+2. Grafana **Dashboards → Import**，上传 `zephyr-dashboard/grafana/dashboards/zephyr-watch-system.json`，数据源绑定 **uid 为 `ZephyrPrometheus`** 的预置数据源。
+3. Flink / Kafka / node 相关面板依赖对应 exporter；未部署时 `up` 为 0 或曲线为空为正常现象。
+

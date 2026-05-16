@@ -24,6 +24,18 @@ public final class StorageConfig {
 
     public static final String ALERT_WEBHOOK_URL = env("ZEPHYR_ALERT_WEBHOOK_URL", "");
 
+    /** Optional; used with {@link #ALERT_WEBHOOK_URL} when the robot uses 加签 (same scheme as WeCom/DingTalk). */
+    public static final String ALERT_WEBHOOK_SIGN_SECRET = env("ZEPHYR_ALERT_WEBHOOK_SIGN_SECRET", "");
+
+    /**
+     * When only {@link #ALERT_WEBHOOK_URL} is set (no DB row), same values as {@code webhook_config.webhook_type}:
+     * GENERIC, WECOM, DINGTALK, or aliases (QYWX, DING, …).
+     */
+    public static final String ALERT_WEBHOOK_TYPE = env("ZEPHYR_ALERT_WEBHOOK_TYPE", "GENERIC");
+
+    /** Minimum risk level for env-only URL target (same semantics as {@code webhook_config.min_risk_level}). */
+    public static final String ALERT_WEBHOOK_MIN_RISK_LEVEL = env("ZEPHYR_ALERT_WEBHOOK_MIN_RISK_LEVEL", "HIGH");
+
     private StorageConfig() {
     }
 

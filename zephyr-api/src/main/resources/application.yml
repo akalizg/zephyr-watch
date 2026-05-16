@@ -1,5 +1,7 @@
 server:
   port: ${ZEPHYR_API_PORT:8080}
+  error:
+    include-message: always
 
 spring:
   datasource:
@@ -24,3 +26,9 @@ management:
   endpoint:
     health:
       show-details: always
+
+# Webhook HTTP 行为（Flink WebhookAlertSink 与 WebhookConfigController 均读取下列环境变量，非 Spring 属性）:
+# ZEPHYR_WEBHOOK_CONNECT_TIMEOUT_MS  默认 5000
+# ZEPHYR_WEBHOOK_READ_TIMEOUT_MS     默认 5000
+# ZEPHYR_WEBHOOK_MAX_ATTEMPTS        默认 2
+# 仅当使用 ZEPHYR_ALERT_WEBHOOK_URL 且机器人开启加签时：ZEPHYR_ALERT_WEBHOOK_SIGN_SECRET

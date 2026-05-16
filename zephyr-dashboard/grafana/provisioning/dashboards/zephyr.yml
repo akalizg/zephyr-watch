@@ -1,0 +1,14 @@
+# File provider: JSON under /etc/grafana/dashboards/zephyr (see docker-compose.grafana.yml volume).
+apiVersion: 1
+
+providers:
+  - name: Zephyr Watch
+    orgId: 1
+    folder: Zephyr Watch
+    folderUid: zephyr-watch-folder
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/dashboards/zephyr

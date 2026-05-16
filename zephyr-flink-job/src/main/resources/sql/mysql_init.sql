@@ -171,8 +171,25 @@ CREATE TABLE IF NOT EXISTS webhook_config (
     name VARCHAR(128) NOT NULL,
     webhook_type VARCHAR(32) NOT NULL,
     webhook_url VARCHAR(1024) NOT NULL,
+    webhook_sign_secret VARCHAR(512) NULL,
     min_risk_level VARCHAR(32) DEFAULT 'HIGH',
     enabled TINYINT DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS webhook_send_log (
+    log_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    webhook_id BIGINT NULL,
+    webhook_type VARCHAR(32) NOT NULL,
+    source VARCHAR(16) NOT NULL,
+    event_id VARCHAR(128) NULL,
+    machine_id VARCHAR(64) NULL,
+    risk_level VARCHAR(32) NULL,
+    status VARCHAR(16) NOT NULL,
+    http_status INT NULL,
+    attempts INT NOT NULL DEFAULT 1,
+    error_message VARCHAR(1024) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_webhook_send_log_wh_created (webhook_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

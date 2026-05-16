@@ -1,0 +1,34 @@
+# Grafana + file provisioning. extra_hosts fixes Linux Docker:
+#   "lookup host.docker.internal on 8.8.8.8:53: no such host" for ZephyrPrometheus / ZephyrMySQL.
+#
+# Usage (from this directory):
+#   MySQL password for Grafana provisioning: use repo-root ../.env (ZEPHYR_GRAFANA_MYSQL_PASSWORD)
+#   and/or ./.env — both are loaded when present (./.env wins on duplicate keys). Do not commit secrets.
+#   docker compose -f docker-compose.grafana.yml up -d
+#
+# Requires Prometheus on host :9090 (see README §1) or change prometheus.yml datasource URL.
+# Image: default OSS; team may switch to grafana/grafana-enterprise (see README §2 Feishu row).
+
+services:
+  grafana:
+    image: grafana/grafana-oss:10.4.3
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Inject ZEPHYR_GRAFANA_MYSQL_PASSWORD (and other keys) into the container. Compose does NOT
+    # load repo-root .env for ${VAR} interpolation in this file unless you pass --env-file; env_file
+    # fixes the common case: password only in D:\...\zephyr-watch\.env while compose lives here.
+    env_file:
+      - path: ../.env
+        required: false
+      - path: .env
+        required: false
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      # Dashboard JSON auto-load (replaces manual import after each `docker rm` without a data volume).
+      - ./grafana/dashboards:/etc/grafana/dashboards/zephyr:ro
