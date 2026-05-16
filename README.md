@@ -1719,23 +1719,68 @@ cd zephyr-ml
 
 ## 任务 C：可观测性与 Webhook（交付索引）
 
-任务 C 的完整说明、接口与答辩演示步骤见 **[`docs/c-observability.md`](docs/c-observability.md)**。摘要如下。
+> **【本节 README 更新摘要】**（相对原「交付索引」一段，仅任务 C 快速索引）
+>
+> | 变更 | 说明 |
+> |------|------|
+> | 新增 | **监控入口** 表：8080 API/Actuator、9090 Prometheus、3000 Grafana、Webhook REST |
+> | 调整 | **Webhook 配置** 独立为三级标题；超时/重试补充默认值（5000ms、2 次） |
+> | 新增 | **指标来源与 Prometheus** 表：`zephyr-api` / `flink` / `kafka` / `node` 与 exporter、本机常见 UP/DOWN |
+> | 新增 | **Grafana 与 Dashboard 导入**：Compose 命令、业务/系统看板说明、手动 Import 三步 |
+> | 调整 | 开头增加 [`setup-collaborators.md`](docs/setup-collaborators.md) 链接；原「Grafana 资源路径」合并进文末路径列表 |
 
-**Webhook**
+任务 C 的完整说明、接口与答辩演示见 **[`docs/c-observability.md`](docs/c-observability.md)**；从零安装（含 Compose、`.env`）见 **[`docs/setup-collaborators.md`](docs/setup-collaborators.md)**。以下为根 README 快速索引，不展开实现细节。
 
-- **通道类型**：`webhook_config.webhook_type` 为 `GENERIC`（`AlertEvent` 原样 JSON）、`WECOM` / `QYWX` 等别名（企业微信 Markdown）、`DINGTALK` / `DING`（钉钉 Markdown）。Flink `WebhookAlertSink` 与 `POST /api/webhooks/{id}/test` 使用同一套消息体规则。
-- **加签**：表字段 `webhook_sign_secret`；仅环境变量 URL 时使用 `ZEPHYR_ALERT_WEBHOOK_SIGN_SECRET`。旧库需执行一次 `zephyr-flink-job/src/main/resources/sql/mysql_webhook_task_c_upgrade.sql`。
-- **超时与重试**：`ZEPHYR_WEBHOOK_CONNECT_TIMEOUT_MS`、`ZEPHYR_WEBHOOK_READ_TIMEOUT_MS`、`ZEPHYR_WEBHOOK_MAX_ATTEMPTS`（Flink 与 API 一致）。
-- **最小风险等级**：表字段 `min_risk_level`；仅 `ZEPHYR_ALERT_WEBHOOK_URL` 时使用 `ZEPHYR_ALERT_WEBHOOK_MIN_RISK_LEVEL`，通道类型用 `ZEPHYR_ALERT_WEBHOOK_TYPE`。
-- **发送记录与查询**：表 `webhook_send_log`；`GET /api/webhooks/{id}/deliveries?page=&size=`。仅 URL 模式时 `webhook_id` 为空，不会出现在按 `id` 查询结果中。
-- **联调**：`POST /api/webhooks/{id}/test?dryRun=true` 返回 `bodyJson` 等元数据，不发起外呼。
+### 监控入口（本机默认）
 
-**Prometheus / Grafana**
+| 用途 | 地址 |
+|------|------|
+| Spring Boot API / 业务 Dashboard 页 | http://localhost:8080/dashboard |
+| API 健康检查 | http://localhost:8080/actuator/health |
+| Prometheus 指标（API 内嵌 exporter） | http://localhost:8080/actuator/prometheus |
+| Prometheus UI / Targets | http://localhost:9090 （`/targets` 查看抓取状态） |
+| Grafana | http://localhost:3000 （默认账号见 `zephyr-dashboard/docker-compose.grafana.yml`） |
+| Webhook 配置 REST | http://localhost:8080/api/webhooks |
 
-- 抓取配置：`zephyr-dashboard/prometheus/prometheus.yml`；指标与 exporter 说明：`zephyr-dashboard/prometheus/exporter-notes/README.md`。
-- 启动与挂载：`zephyr-dashboard/README.md`（`docker compose -f docker-compose.grafana.yml`、看板 file provisioning）。
+### Webhook 配置
 
-## Grafana 资源路径
+- **通道类型**：`webhook_config.webhook_type` 为 `GENERIC`（`AlertEvent` 原样 JSON）、`WECOM` / `QYWX`（企业微信 Markdown）、`DINGTALK` / `DING`（钉钉 Markdown）。Flink `WebhookAlertSink` 与 `POST /api/webhooks/{id}/test` 共用同一套消息体。
+- **加签**：库表 `webhook_sign_secret`（API 字段 `webhookSignSecret`）；仅环境变量 URL 时用 `ZEPHYR_ALERT_WEBHOOK_SIGN_SECRET`。旧库执行一次 `zephyr-flink-job/src/main/resources/sql/mysql_webhook_task_c_upgrade.sql`。
+- **超时与重试**（环境变量，Flink 与 API 一致）：`ZEPHYR_WEBHOOK_CONNECT_TIMEOUT_MS`、`ZEPHYR_WEBHOOK_READ_TIMEOUT_MS`（默认 5000）、`ZEPHYR_WEBHOOK_MAX_ATTEMPTS`（默认 2）。
+- **最小风险等级**：表字段 `min_risk_level`；仅 `ZEPHYR_ALERT_WEBHOOK_URL` 时用 `ZEPHYR_ALERT_WEBHOOK_MIN_RISK_LEVEL`，通道类型用 `ZEPHYR_ALERT_WEBHOOK_TYPE`。
+- **发送记录**：表 `webhook_send_log`（`status` 为 `SUCCESS` / `FAILED`）；查询 `GET /api/webhooks/{id}/deliveries?page=&size=`。
+- **联调**：`POST /api/webhooks/{id}/test?dryRun=true` 只看消息体，不外呼；实发去掉 `dryRun`。
+
+### 指标来源与 Prometheus
+
+| job（`prometheus.yml`） | 指标来源 | 本机实验常见状态 |
+|-------------------------|----------|------------------|
+| `zephyr-api` | Spring Boot Actuator + Micrometer（含 JVM / HTTP / 进程 CPU） | **UP**（需先启动 API） |
+| `flink` | Flink 集群 Prometheus Reporter（示例端口 9249） | DOWN（`mvn exec:java` 本地作业通常无 9249） |
+| `kafka` | kafka_exporter 等 HTTP `/metrics`（示例 9308；**不是** Broker 9092） | DOWN（需在 Broker 主机部署 exporter） |
+| `node` | node_exporter（示例 9100） | DOWN（Windows 本机通常未装） |
+
+- 抓取配置：`zephyr-dashboard/prometheus/prometheus.yml`
+- 对齐说明与常见指标名：`zephyr-dashboard/prometheus/exporter-notes/README.md`
+- 验收建议：Targets 至少 **`zephyr-api` 为 UP**；其余 job 在部署对应 exporter 并将 `targets` 改为实际 IP:端口后再验。
+
+### Grafana 与 Dashboard 导入
+
+**推荐（自动挂载，无需手动 Import）：**
+
+```bash
+cd zephyr-dashboard
+docker compose -f docker-compose.grafana.yml up -d
+```
+
+Compose 会加载 `grafana/provisioning/`（数据源 UID：`ZephyrMySQL`、`ZephyrPrometheus`）并挂载 `grafana/dashboards/`，启动后在 **Dashboards → Zephyr Watch** 下可见：
+
+- `zephyr-watch-business.json` — 业务看板（MySQL）
+- `zephyr-watch-system.json` — 系统看板（Prometheus；API/JVM 有数据，Flink/Kafka/node 无 exporter 时部分面板为空属正常）
+
+**手动导入（未使用 Compose 时）：** Grafana → **Connections → Data sources** 添加 MySQL 与 Prometheus（Docker Desktop 访问宿主机用 `host.docker.internal`）→ **Dashboards → Import** 上传上述两个 JSON，数据源选 `ZephyrMySQL` / `ZephyrPrometheus`。详见 **[`zephyr-dashboard/README.md`](zephyr-dashboard/README.md)**。
+
+**相关文件路径：**
 
 ```text
 zephyr-dashboard/grafana/provisioning/datasources/mysql.yml
