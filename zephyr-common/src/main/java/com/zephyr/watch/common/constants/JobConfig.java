@@ -19,7 +19,10 @@ public final class JobConfig {
     public static final long PRODUCER_SLEEP_MS = 500L;
 
     public static final String DEFAULT_PMML_MODEL_PATH = "src/main/resources/models/model.pmml";
-    public static final String CHECKPOINT_STORAGE_PATH = "file:///D:/Javatest/zephyr-watch/target/flink-checkpoints";
+    public static final String CHECKPOINT_STORAGE_PATH = envString(
+            "ZEPHYR_CHECKPOINT_STORAGE_PATH",
+            "file:///" + System.getProperty("user.dir").replace('\\', '/') + "/target/flink-checkpoints"
+    );
     public static final boolean DEFAULT_DEBUG_STREAM_PRINT_ENABLED = false;
 
     public static final double RUL_CRITICAL_THRESHOLD = 30.0D;
@@ -58,5 +61,13 @@ public final class JobConfig {
         } catch (NumberFormatException ignored) {
             return defaultValue;
         }
+    }
+
+    private static String envString(String name, String defaultValue) {
+        String value = System.getenv(name);
+        if (value == null || value.trim().isEmpty()) {
+            return defaultValue;
+        }
+        return value.trim();
     }
 }

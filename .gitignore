@@ -18,6 +18,10 @@ runtime-logs/
 .env
 .env.*
 !.env.example
+start-online-inference.bat
+run-all-local.bat
+ort-smoke/
+onnxruntime-javap.txt
 zephyr-ml/data/feedback_training_sample.csv
 zephyr-ml/data/review_labels.csv
 zephyr-ml/data/normalized_feedback_samples.csv

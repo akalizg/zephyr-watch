@@ -9,12 +9,13 @@ import com.zephyr.watch.common.entity.RulPrediction;
 import com.zephyr.watch.common.entity.SensorReading;
 import com.zephyr.watch.common.utils.JsonUtils;
 import com.zephyr.watch.flink.process.CepConsecutiveRiskAlertSelector;
+import com.zephyr.watch.flink.process.AsyncRestRiskPredictFunction;
 import com.zephyr.watch.flink.process.FeatureAnomalyAlertFunction;
 import com.zephyr.watch.flink.process.FeatureWindowProcessFunction;
 import com.zephyr.watch.flink.process.FlinkRuntimeConfigurer;
 import com.zephyr.watch.flink.process.ParseAndValidateSensorProcessFunction;
+import com.zephyr.watch.flink.process.MultiBackendRiskPredictFunction;
 import com.zephyr.watch.flink.process.ProcessingTimeFeatureProcessFunction;
-import com.zephyr.watch.flink.process.RestRiskPredictFunction;
 import com.zephyr.watch.flink.process.RiskThresholdAlertFunction;
 import com.zephyr.watch.flink.process.RulPredictFunction;
 import com.zephyr.watch.flink.sink.KafkaJsonSinkFactory;
@@ -24,12 +25,14 @@ import com.zephyr.watch.flink.sink.RulRedisMapper;
 import com.zephyr.watch.flink.sink.WebhookAlertSink;
 import com.zephyr.watch.flink.source.SensorKafkaSourceFactory;
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.cep.CEP;
 import org.apache.flink.cep.pattern.Pattern;
 import org.apache.flink.cep.pattern.conditions.SimpleCondition;
+import org.apache.flink.streaming.api.datastream.AsyncDataStream;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -63,6 +66,22 @@ public class OnlineInferenceJob {
         boolean enableRedisSink = envBool("ZEPHYR_ENABLE_REDIS_SINK", true);
         boolean enableKafkaOutputSink = envBool("ZEPHYR_ENABLE_KAFKA_OUTPUT_SINK", true);
         boolean enableAlertPipeline = envBool("ZEPHYR_ENABLE_ALERT_PIPELINE", true);
+        boolean enableInvalidSensorSink = envBool("ZEPHYR_ENABLE_INVALID_SENSOR_SINK", false);
+        String riskInferenceBackend = envString("ZEPHYR_RISK_INFERENCE_BACKEND", "rest");
+        String normalizedRiskInferenceBackend = normalizeRiskBackend(riskInferenceBackend);
+        // Keep legacy flag for backward compatibility; REST now uses Async I/O by default.
+        boolean legacyEnableAsyncRiskInference = envBool("ZEPHYR_ENABLE_ASYNC_RISK_INFERENCE", false);
+        // Emergency rollback switch for REST mainline, defaults to async-enabled.
+        boolean forceSyncRestInference = envBool("ZEPHYR_FORCE_SYNC_REST_INFERENCE", false);
+        boolean useAsyncRestMainline = "rest".equals(normalizedRiskInferenceBackend) && !forceSyncRestInference;
+        String onnxModelPath = envString("ZEPHYR_ONNX_MODEL_PATH", "");
+        String onnxInputName = envString("ZEPHYR_ONNX_INPUT_NAME", "");
+        String onnxOutputName = envString("ZEPHYR_ONNX_OUTPUT_NAME", "");
+        String tfServingUrl = envString("ZEPHYR_TF_SERVING_URL", "");
+        String tfServingInputName = envString("ZEPHYR_TF_SERVING_INPUT_NAME", "");
+        String tfServingSignatureName = envString("ZEPHYR_TF_SERVING_SIGNATURE_NAME", "serving_default");
+        long asyncRiskInferenceTimeoutMs = envLong("ZEPHYR_ASYNC_RISK_INFERENCE_TIMEOUT_MS", 8000L);
+        int asyncRiskInferenceCapacity = envInt("ZEPHYR_ASYNC_RISK_INFERENCE_CAPACITY", 100);
 
         System.out.println("ZEPHYR_ONLINE_WINDOW_TIME_MODE="
                 + (eventTimeWindows ? "event" : "processing")
@@ -74,7 +93,23 @@ public class OnlineInferenceJob {
                 + ", enableFeatureSnapshotSink=" + enableFeatureSnapshotSink
                 + ", enableRedisSink=" + enableRedisSink
                 + ", enableKafkaOutputSink=" + enableKafkaOutputSink
-                + ", enableAlertPipeline=" + enableAlertPipeline);
+                + ", enableAlertPipeline=" + enableAlertPipeline
+                + ", enableInvalidSensorSink=" + enableInvalidSensorSink
+                + ", riskInferenceBackend=" + riskInferenceBackend
+                + ", normalizedRiskInferenceBackend=" + normalizedRiskInferenceBackend
+                + ", useAsyncRestMainline=" + useAsyncRestMainline
+                + ", forceSyncRestInference=" + forceSyncRestInference
+                + ", legacyEnableAsyncRiskInference=" + legacyEnableAsyncRiskInference
+                + ", asyncRiskInferenceTimeoutMs=" + asyncRiskInferenceTimeoutMs
+                + ", asyncRiskInferenceCapacity=" + asyncRiskInferenceCapacity);
+        if ("onnx".equalsIgnoreCase(normalizedRiskInferenceBackend)) {
+            System.out.println("ZEPHYR_ONNX_BACKEND_ACTIVE modelPath=" + onnxModelPath
+                    + ", inputName=" + onnxInputName
+                    + ", outputName=" + onnxOutputName);
+        }
+        if (legacyEnableAsyncRiskInference) {
+            System.out.println("ZEPHYR_ENABLE_ASYNC_RISK_INFERENCE is legacy; REST async is now mainline by backend routing.");
+        }
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         FlinkRuntimeConfigurer.configureReliableStreaming(env);
@@ -91,9 +126,11 @@ public class OnlineInferenceJob {
             kafkaRawStream.print("STEP1-KAFKA-RAW");
         }
 
-        SingleOutputStreamOperator<SensorReading> cleanStream = kafkaRawStream
+        SingleOutputStreamOperator<SensorReading> parsedStream = kafkaRawStream
                 .process(new ParseAndValidateSensorProcessFunction())
-                .name("Parse_And_Validate_Sensor")
+                .name("Parse_And_Validate_Sensor");
+
+        SingleOutputStreamOperator<SensorReading> cleanStream = parsedStream
                 .assignTimestampsAndWatermarks(
                         WatermarkStrategy.<SensorReading>forBoundedOutOfOrderness(Duration.ofSeconds(10))
                                 .withTimestampAssigner((event, timestamp) -> event.getEventTime())
@@ -102,6 +139,14 @@ public class OnlineInferenceJob {
 
         if (debugPrint) {
             cleanStream.print("STEP2-CLEAN-DATA");
+        }
+
+        if (enableInvalidSensorSink) {
+            DataStream<String> invalidSensorStream =
+                    parsedStream.getSideOutput(ParseAndValidateSensorProcessFunction.INVALID_SENSOR_TAG);
+            invalidSensorStream
+                    .sinkTo(KafkaJsonSinkFactory.buildInvalidSensorSink())
+                    .name("Kafka_Invalid_Sensor_Sink");
         }
 
         SingleOutputStreamOperator<SensorReading> windowInputStream = cleanStream
@@ -145,9 +190,41 @@ public class OnlineInferenceJob {
             featureStream.addSink(MySqlSinkFactory.buildFeatureSnapshotSink()).name("MySQL_Feature_Snapshot_Sink");
         }
 
-        SingleOutputStreamOperator<RiskPrediction> riskStream = featureStream
-                .map(new RestRiskPredictFunction(modelServiceUrl, modelVersion))
-                .name("REST_Risk_Classification_Inference");
+        SingleOutputStreamOperator<RiskPrediction> riskStream;
+        if (useAsyncRestMainline) {
+            riskStream = AsyncDataStream
+                    .orderedWait(
+                            featureStream,
+                            new AsyncRestRiskPredictFunction(
+                                    pmmlPath,
+                                    modelServiceUrl,
+                                    modelVersion,
+                                    asyncRiskInferenceCapacity
+                            ),
+                            asyncRiskInferenceTimeoutMs,
+                            TimeUnit.MILLISECONDS,
+                            asyncRiskInferenceCapacity
+                    )
+                    .name("MAINLINE_ASYNC_REST_Risk_Classification_Inference");
+        } else {
+            if ("rest".equals(normalizedRiskInferenceBackend) && forceSyncRestInference) {
+                System.out.println("ZEPHYR_FORCE_SYNC_REST_INFERENCE=true, fallback to sync REST inference.");
+            }
+            riskStream = featureStream
+                    .map(new MultiBackendRiskPredictFunction(
+                            pmmlPath,
+                            modelVersion,
+                            modelServiceUrl,
+                            tfServingUrl,
+                            normalizedRiskInferenceBackend,
+                            onnxModelPath,
+                            onnxInputName,
+                            onnxOutputName,
+                            tfServingInputName,
+                            tfServingSignatureName
+                    ))
+                    .name("RISK_Classification_Inference");
+        }
 
         SingleOutputStreamOperator<RulPrediction> rulStream = null;
         if (enableLocalRul) {
@@ -269,6 +346,27 @@ public class OnlineInferenceJob {
         }
     }
 
+    private static long envLong(String name, long defaultValue) {
+        String value = System.getenv(name);
+        if (value == null || value.trim().isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            long parsed = Long.parseLong(value.trim());
+            return parsed > 0 ? parsed : defaultValue;
+        } catch (NumberFormatException ignored) {
+            return defaultValue;
+        }
+    }
+
+    private static String envString(String name, String defaultValue) {
+        String value = System.getenv(name);
+        if (value == null || value.trim().isEmpty()) {
+            return defaultValue;
+        }
+        return value.trim();
+    }
+
     private static boolean envBool(String name, boolean defaultValue) {
         String value = System.getenv(name);
         if (value == null || value.trim().isEmpty()) {
@@ -277,6 +375,20 @@ public class OnlineInferenceJob {
         return "true".equalsIgnoreCase(value.trim())
                 || "1".equals(value.trim())
                 || "yes".equalsIgnoreCase(value.trim());
+    }
+
+    private static String normalizeRiskBackend(String backend) {
+        if (backend == null || backend.trim().isEmpty()) {
+            return "rest";
+        }
+        String normalized = backend.trim().toLowerCase();
+        if ("tf".equals(normalized) || "tfserving".equals(normalized) || "tf-serving".equals(normalized)) {
+            return "tf-serving";
+        }
+        if ("onnx".equals(normalized)) {
+            return "onnx";
+        }
+        return "rest";
     }
 
     private static class ValidSensorReadingFilter implements FilterFunction<SensorReading> {
