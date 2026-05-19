@@ -1,139 +1,190 @@
-﻿# A成员功能验收手册（在线推理增强）
+# A成员功能验收手册（零基础可执行版）
 
-> 适用对象：组长/验收老师（即使不了解实现细节，也能按步骤完成验收）  
-> 适用范围：A 成员负责的 4 项能力
->
-> 1. REST 风险推理主链路改造为 Flink Async I/O（默认主链路）
-> 2. ONNX Runtime 在线推理接入
-> 3. TF Serving 推理接入
-> 4. 无效传感器 Side Output 接入 `invalid_sensor_topic`
+> 这份手册是给“对项目几乎不了解的人”使用的。
+> 你不需要理解代码，只需要按顺序执行命令，观察指定结果，即可完成验收。
 
 ---
 
-## 1. 验收目标与通过标准
+## 1. 这份手册要验收什么
 
-### 1.1 验收目标
+A 成员负责的是“在线推理增强”这一部分，一共验收 4 项能力：
 
-确认 A 成员改造已达到“主链路已改造、可运行、可回退、可切换、可验证”的状态，而不是“仅代码预留”。
+1. 默认情况下，系统是否已经把 REST 推理主链路改成了 Async I/O。
+2. 出现问题时，是否可以一键回退到同步 REST 推理。
+3. 是否可以切换到 ONNX 后端并正常推理。
+4. 是否可以切换到 TF Serving 后端并正常推理。
+5. 遇到非法传感器数据时，是否可以把这类无效数据单独旁路到 `invalid_sensor_topic`。
 
-### 1.2 总通过标准（全部满足才算通过）
+最后还要确认一件事：
 
-1. 默认配置下，REST 推理走 Async I/O 主链路，系统可稳定出数。
-2. 打开应急开关后，可回退到同步 REST 推理，系统仍可出数。
-3. ONNX 后端可切换成功并产出推理结果。
-4. TF Serving 后端可切换成功并产出推理结果。
-5. 无效传感器消息可被旁路到 `invalid_sensor_topic`。
-6. 切回团队默认配置后，其他成员主流程（API、OnlineInference、Recommend、AlertReview、Producer）不受影响。
+6. A 成员的改动不能把其他成员的主流程带坏。
 
 ---
 
-## 2. 验收前准备（必须完成）
+## 2. 先认识 4 个你会用到的东西
 
-## 2.1 代码与目录
+为了避免后面看不懂，这里先用最直白的话解释一下。
 
-在项目根目录执行（示例路径按你本机调整）：
+### 2.1 `run-all.bat` 是什么
+
+它是“全项目一键启动脚本”。
+
+你可以把它理解成：
+
+- 第一次启动项目时，运行它。
+- 它会把这个项目需要的几个主要进程都拉起来。
+
+### 2.2 `verify-task-a.ps1` 是什么
+
+它是“A 成员专用的快捷验收脚本”。
+
+你可以把它理解成：
+
+- 它不会改你的 `.env` 文件。
+- 它会临时切换 A 成员相关配置。
+- 它只重启 `OnlineInferenceJob`，不会把整个项目都重启一遍。
+
+所以，正式验收时的推荐方式是：
+
+1. 先用 `run-all.bat` 启动一次全链路。
+2. 后面每个 A 用例都用 `verify-task-a.ps1` 切换场景。
+
+### 2.3 `logs\task-a\` 是什么
+
+这是快捷验收脚本保存日志的目录。
+
+你可以把它理解成：
+
+- 每次运行 `verify-task-a.ps1`，它都会生成一份新的日志。
+- 你不需要盯着黑窗口找日志，直接看这个目录里最新的日志文件就行。
+
+### 2.4 MySQL 和 Kafka 在这里分别干什么
+
+- MySQL：用来确认系统是不是“真的跑出了结果”。
+- Kafka：用来确认“无效数据旁路”这条链路是不是真的通了。
+
+如果你只想记住一句话：
+
+- 看 MySQL，是为了验证“有没有推理结果”。
+- 看 Kafka，是为了验证“非法消息有没有被单独送出去”。
+
+---
+
+## 3. 验收前准备
+
+这一段只需要做一次。
+
+### 3.1 进入项目根目录
 
 ```powershell
 cd D:\dashuju\homework\zephyr-watch
 ```
 
-确认存在以下文件：
+### 3.2 确认关键文件存在
+
+请确认项目根目录下至少有这些文件：
 
 - `run-all.bat`
-- `.env`（若没有就从 `.env.example` 复制）
-- `zephyr-flink-job/src/main/java/com/zephyr/watch/flink/app/OnlineInferenceJob.java`
+- `verify-task-a.ps1`
+- `stop-zephyr.ps1`
+- `.env`
+
+还要确认这些文件存在：
+
 - `zephyr-ml/train/export_onnx.py`
 - `zephyr-ml/train/export_tf_serving_saved_model.py`
 
-若 `.env` 不存在：
+如果 `.env` 不存在，就执行：
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-## 2.2 外部依赖准备
+### 3.3 确认基础软件存在
 
-必须可用：
-
-1. Kafka（含输入 topic 和输出 topic）
-2. MySQL（含 `zephyr_watch` 库和 `mysql_init.sql` 建表结果）
-3. Redis
-4. Python 环境（能运行 `zephyr-ml/serve/risk_model_service.py`）
-5. Java 与 Maven
-
-可选但建议：
-
-1. Docker（用于启动 Grafana/TF Serving 容器）
-
-## 2.3 Kafka Topic 检查（在 Kafka 机器执行）
-
-```bash
-cd /export/server/kafka_2.12-2.4.1/bin
-./kafka-topics.sh --list --bootstrap-server 192.168.88.161:9092
-```
-
-至少应看到：
-
-- `iot_sensor_data`（或你 `.env` 中 `ZEPHYR_INPUT_TOPIC` 指定的输入 topic）
-- `risk_prediction_topic`
-- `alert_event_topic`
-- `review_label_topic`
-- `invalid_sensor_topic`
-
-若缺失 `invalid_sensor_topic`，创建：
-
-```bash
-./kafka-topics.sh --create --topic invalid_sensor_topic --bootstrap-server 192.168.88.161:9092 --partitions 1 --replication-factor 1
-```
-
-## 2.4 MySQL 建表检查
-
-如果历史环境不确定，请重新执行：
-
-- `zephyr-flink-job/src/main/resources/sql/mysql_init.sql`
-
-至少确认存在表：
-
-- `device_risk_prediction`
-- `alert_event`
-- `online_feature_snapshot`
-- `maintenance_recommendation`
-
-## 2.5 一次性健康检查
-
-在 Windows PowerShell 执行：
+在 PowerShell 执行：
 
 ```powershell
 where.exe java
 where.exe mvn
 ```
 
-若命令不存在，先补齐环境变量再继续验收。
+如果这两个命令都能返回路径，说明 Java 和 Maven 基本可用。
+
+### 3.4 确认外部依赖可用
+
+这几个服务必须已经准备好：
+
+1. Kafka
+2. MySQL
+3. Redis
+4. Python 环境
+
+如果要验收 TF Serving，还建议有 Docker。
+
+### 3.5 确认 Kafka 里有需要的 topic
+
+在 Kafka 所在机器执行：
+
+```bash
+cd /export/server/kafka_2.12-2.4.1/bin
+./kafka-topics.sh --list --bootstrap-server 192.168.88.161:9092
+```
+
+至少应该能看到：
+
+- `iot_sensor_data`
+- `risk_prediction_topic`
+- `alert_event_topic`
+- `review_label_topic`
+- `invalid_sensor_topic`
+
+如果没有 `invalid_sensor_topic`，创建它：
+
+```bash
+./kafka-topics.sh --create --topic invalid_sensor_topic --bootstrap-server 192.168.88.161:9092 --partitions 1 --replication-factor 1
+```
+
+### 3.6 确认 MySQL 有业务表
+
+至少确认以下表存在：
+
+- `device_risk_prediction`
+- `alert_event`
+- `online_feature_snapshot`
+- `maintenance_recommendation`
+
+如果不确定数据库是否初始化过，可以重新执行：
+
+- `zephyr-flink-job/src/main/resources/sql/mysql_init.sql`
 
 ---
 
-## 3. 启动与通用验证基线
+## 4. 正式验收前的统一启动方式
 
-每个用例都建议先停干净，再启动。
+这部分也只做一次。
 
-## 3.1 停止历史进程
+### 4.1 先停掉历史进程
 
-下述命令进入到zephyr-watch（项目根目录）目录执行
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\stop-zephyr.ps1
 ```
 
-## 3.2 启动全链路
+这一步的作用是清理旧进程，避免你看到的是上一次留下来的结果。
+
+### 4.2 启动全链路
 
 ```powershell
 .\run-all.bat zephyr-flink-job\src\main\resources\models\model.pmml risk-classifier-rest-v1 true http://localhost:5001/api/risk/score
 ```
 
-> 第 3 个参数 `true` 是为了让日志更详细，便于组长验收。
+你可以把这一步理解成：“把项目主要流程统一拉起来”。
 
-## 3.3 通用健康检查
+启动后，不要手动关闭这些窗口。
 
-等待 30~90 秒后执行：
+### 4.3 做一次健康检查
+
+等 30 到 90 秒后，在 PowerShell 执行：
 
 ```powershell
 curl.exe -s http://localhost:8080/actuator/health
@@ -141,43 +192,60 @@ curl.exe -s http://localhost:5001/api/risk/health
 curl.exe -s http://localhost:8080/api/dashboard/overview
 ```
 
-预期：
+看到下面这些现象，就说明基线启动基本成功：
 
-1. API health 返回 `"status":"UP"`
-2. 风险模型服务 health 返回 `"success":true`
-3. dashboard overview 返回带 `predictionCount` 等统计字段的 JSON
+1. 第一个接口返回里有 `"status":"UP"`
+2. 第二个接口返回里有 `"success":true`
+3. 第三个接口能返回 JSON 数据，不是报错页面
+
+### 4.4 后面所有 A 用例都怎么切换
+
+从这里开始，不再手改 `.env`，也不再每次重启整个项目。
+
+统一使用下面这种命令切场景：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify-task-a.ps1 -Scenario 场景名
+```
+
+你只需要换最后的“场景名”。
+
+日志统一在这里看：
+
+```text
+logs\task-a\
+```
 
 ---
 
-## 4. 用例 A-1：验收 REST Async I/O 主链路（核心）
+## 5. 用例 A-1：验证默认 REST 主链路已经是 Async I/O
 
-停止历史进程！！
-在项目根目录执行
-.\stop-zephyr.psl
+这一项要证明：默认情况下，系统走的是“异步 REST 推理”，不是旧的同步方式。
 
-## 4.1 配置
+### 5.1 执行命令
 
-编辑项目根目录 `.env`，确认：
-
-```env
-ZEPHYR_RISK_INFERENCE_BACKEND=rest
-ZEPHYR_FORCE_SYNC_REST_INFERENCE=false
-ZEPHYR_ENABLE_INVALID_SENSOR_SINK=false
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify-task-a.ps1 -Scenario rest-async -ShowWindow
 ```
 
-保存后，执行“启动全链路”。
+这条命令会自动做两件事：
 
-## 4.2 观察日志（OnlineInferenceJob 窗口）
+1. 临时切到 A-1 对应的配置。
+2. 只重启 `OnlineInferenceJob`。
 
-必须看到配置打印里至少包含：
+### 5.2 你要看什么
+
+看脚本输出，或者去 `logs\task-a\` 找最新日志。
+
+必须看到下面 3 条关键信息：
 
 - `riskInferenceBackend=rest`
 - `useAsyncRestMainline=true`
 - `forceSyncRestInference=false`
 
-这 3 条同时成立，表示 REST 默认确实走 Async 主链路。
+如果这 3 条都出现，说明默认 REST 主链路确实已经是 Async I/O。
 
-## 4.3 数据出数验证（MySQL）
+### 5.3 再确认系统真的有输出结果
 
 在 MySQL 客户端执行：
 
@@ -187,9 +255,9 @@ FROM device_risk_prediction
 WHERE created_at >= NOW() - INTERVAL 5 MINUTE;
 ```
 
-预期：`cnt > 0`。
+预期：`cnt > 0`
 
-再查模型版本分布：
+再执行：
 
 ```sql
 SELECT model_version, COUNT(*) AS cnt
@@ -199,198 +267,175 @@ GROUP BY model_version
 ORDER BY cnt DESC;
 ```
 
-预期：有持续新增行。
+预期：能看到最近 10 分钟内有持续新增的记录。
 
-## 4.4 通过标准
+### 5.4 这一项什么情况算通过
 
-1. 日志明确 `useAsyncRestMainline=true`
-2. `device_risk_prediction` 持续新增
+同时满足下面两条就算通过：
+
+1. 日志明确出现 `useAsyncRestMainline=true`
+2. MySQL 里最近几分钟有新的推理结果
 
 ---
 
-## 5. 用例 A-1R：验收应急回退同步 REST（可回退性）
+## 6. 用例 A-1R：验证可以回退到同步 REST
 
-## 5.1 配置
+这一项要证明：如果异步主链路要临时回退，也能正常跑。
 
-将 `.env` 改为：
+### 6.1 执行命令
 
-```env
-ZEPHYR_RISK_INFERENCE_BACKEND=rest
-ZEPHYR_FORCE_SYNC_REST_INFERENCE=true
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify-task-a.ps1 -Scenario rest-sync -ShowWindow
 ```
 
-重启全链路。
+### 6.2 你要看什么
 
-## 5.2 观察日志
-
-OnlineInferenceJob 窗口应出现：
+看最新日志，应该出现：
 
 - `useAsyncRestMainline=false`
 - `ZEPHYR_FORCE_SYNC_REST_INFERENCE=true, fallback to sync REST inference.`
 
-## 5.3 出数验证
+这表示系统已经从默认异步模式切回了同步 REST。
 
-重复执行第 4.3 节 SQL，预期仍持续出数。
+### 6.3 再确认回退后还能继续出结果
 
-## 5.4 通过标准
+继续执行和 A-1 相同的 MySQL 查询：
 
-1. 可从 Async 主链路切换为同步 REST
-2. 回退后系统仍可正常出结果
+```sql
+SELECT COUNT(*) AS cnt
+FROM device_risk_prediction
+WHERE created_at >= NOW() - INTERVAL 5 MINUTE;
+```
+
+预期：仍然大于 0。
+
+### 6.4 这一项什么情况算通过
+
+同时满足下面两条就算通过：
+
+1. 日志确认已经回退到同步 REST
+2. 回退后 MySQL 里仍然继续有新结果
 
 ---
 
-## 6. 用例 A-2：验收无效传感器旁路到 invalid_sensor_topic
+## 7. 用例 A-2：验证无效传感器消息会被旁路到 `invalid_sensor_topic`
 
-## 6.1 配置
+这一项要证明两件事：
 
-`.env` 设置：
+1. 开启开关后，非法消息会进入 `invalid_sensor_topic`
+2. 关闭开关后，新的非法消息不会再进去
 
-```env
-ZEPHYR_RISK_INFERENCE_BACKEND=rest
-ZEPHYR_FORCE_SYNC_REST_INFERENCE=false
-ZEPHYR_ENABLE_INVALID_SENSOR_SINK=true
-```
-
-重启全链路。
-
-## 6.2 日志预检查
-
-OnlineInferenceJob 配置打印中应包含：
-
-- `enableInvalidSensorSink=true`
-
-(ps:在窗口的第1-4行找，后续关于这个日志检查都是)
-
-## 6.3 发送“故意非法”消息（超详细步骤）
-
-下面请在 **Kafka 所在机器** 上操作（通常是 `node1`），并且开两个终端窗口：
-
-### 6.3.1 先确认输入 topic 名称
-
-在项目根目录查看 `.env`：
-
-```bash
-grep ^ZEPHYR_INPUT_TOPIC= D:/dashuju/homework/zephyr-watch/.env
-```
-
-如果你是在 Linux 服务器上且没有这个 Windows 路径，可直接按你环境里的 `.env` 路径查看。  
-若没配置，默认按 `iot_sensor_data` 处理。
-
-### 6.3.2 终端 A：先启动“观察窗口”（消费 invalid topic）
-
-先进入 Kafka 脚本目录（注意必须在 `bin` 下）：
-
-```bash
-cd /export/server/kafka_2.12-2.4.1/bin
-```
+### 7.1 第一步：开启旁路
 
 执行：
 
-```bash
-./kafka-console-consumer.sh --bootstrap-server 192.168.88.161:9092 --topic invalid_sensor_topic --from-beginning --timeout-ms 30000
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify-task-a.ps1 -Scenario invalid-on -ShowWindow
 ```
 
-说明：这个窗口先不要关，保持等待消息。
+然后看最新日志，确认看到：
 
-### 6.3.3 终端 B：发送一条非法消息到输入 topic
+- `enableInvalidSensorSink=true`
 
-同样先进入 Kafka `bin` 目录：
+### 7.2 第二步：发送一条“明显非法”的消息
+
+这一步在 Kafka 所在机器上做。
+
+先开终端 A，用来观察 `invalid_sensor_topic`：
 
 ```bash
 cd /export/server/kafka_2.12-2.4.1/bin
+./kafka-console-consumer.sh --bootstrap-server 192.168.88.161:9092 --topic invalid_sensor_topic --from-beginning --timeout-ms 30000
 ```
 
-执行（以 `iot_sensor_data` 为例）：
+再开终端 B，向输入 topic 发送一条非法消息：
 
 ```bash
+cd /export/server/kafka_2.12-2.4.1/bin
 echo 'A_ACCEPT_INVALID_20260518_NOT_JSON' | ./kafka-console-producer.sh --broker-list 192.168.88.161:9092 --topic iot_sensor_data
 ```
 
-这条消息不是 JSON，`ParseAndValidateSensorProcessFunction` 会判为无效并走 Side Output。
+为什么这条消息算非法：
 
-## 6.4 验证结果（看终端 A）
+- 因为它不是 JSON
+- 系统会把它识别为无效传感器数据
 
-发送后回到终端 A，预期在 30 秒内看到：
+### 7.3 第三步：看是否真的被旁路
+
+回到终端 A。
+
+预期在 30 秒内能看到：
 
 - `A_ACCEPT_INVALID_20260518_NOT_JSON`
 
-只要看到这行，就说明“无效数据 -> Side Output -> invalid_sensor_topic”链路已打通。
+看到这行，就说明这条无效消息被成功送到了 `invalid_sensor_topic`。
 
-如果 30 秒内没看到，按下面顺序排查：
+### 7.4 第四步：再验证关闭开关后不会继续写出
 
-1. `OnlineInferenceJob` 日志里是否有 `enableInvalidSensorSink=true`（改完 `.env` 后要重启任务）。
-2. 发送消息的 topic 是否和 `ZEPHYR_INPUT_TOPIC` 一致（不要发错 topic）。
-3. `invalid_sensor_topic` 是否已创建。
-4. `./kafka-console-consumer.sh` 和 `./kafka-console-producer.sh` 是否都在 `/export/server/kafka_2.12-2.4.1/bin` 执行。
-5. `--bootstrap-server 192.168.88.161:9092` 是否是当前可达 Kafka 地址。
+执行：
 
-## 6.5 通过标准
-
-1. `enableInvalidSensorSink=true` 时，非法输入能进入 `invalid_sensor_topic`
-2. 关闭开关后（改回 `false` 并重启），新发送的非法消息不再进入 `invalid_sensor_topic`
-
-## 6.6 反向验证（证明关闭开关后“确实不再写出”）
-
-这一段非常关键，建议组长必须执行，避免误判。
-
-### 6.6.1 先把开关关掉并重启
-
-把 `.env` 改成：
-
-```env
-ZEPHYR_ENABLE_INVALID_SENSOR_SINK=false
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify-task-a.ps1 -Scenario invalid-off -ShowWindow
 ```
 
-然后重启全链路（至少要重启 `OnlineInferenceJob`）。
-
-重启后在 `OnlineInferenceJob` 日志里确认：
+看日志，确认出现：
 
 - `enableInvalidSensorSink=false`
 
-### 6.6.2 先发一个“基线合法消息”（用于确认链路还活着）
-
-在输入 topic 发一条**合法 JSON**（字段齐全）：
+然后先发送一条合法消息，用来确认系统整体还在工作：
 
 ```bash
 echo '{"machineId":9991,"cycle":1,"pressure":21.1,"temperature":1578.2,"speed":140.3,"eventTime":1893456000000}' | ./kafka-console-producer.sh --broker-list 192.168.88.161:9092 --topic iot_sensor_data
 ```
 
-说明：合法消息会走主流程，不会进 `invalid_sensor_topic`，这一步是确认系统并非“整体停了”。
-
-### 6.6.3 再发一个“非法消息”（本次要验证的对象）
+再发送一条新的非法消息：
 
 ```bash
 echo 'A_ACCEPT_INVALID_20260518_NOT_JSON_AFTER_DISABLE' | ./kafka-console-producer.sh --broker-list 192.168.88.161:9092 --topic iot_sensor_data
 ```
 
-### 6.6.4 用“只看新消息”的方式消费 invalid topic
-
-重点：这里不要用 `--from-beginning`，否则会把历史旧消息读出来，容易误以为“还在写”。
-
-请新开终端，在发送完上面两条消息后立刻执行：
+然后执行下面的消费命令：
 
 ```bash
 ./kafka-console-consumer.sh --bootstrap-server 192.168.88.161:9092 --topic invalid_sensor_topic --timeout-ms 10000
 ```
 
-预期：10 秒超时后直接退出，**不应出现**：
+注意：
 
-- `A_ACCEPT_INVALID_20260518_NOT_JSON_AFTER_DISABLE`
+- 这里不要加 `--from-beginning`
+- 否则你会把历史旧消息也看出来，容易误判
 
-如果仍看到了这条新标记消息，说明关闭开关未生效，常见原因：
+预期结果：
 
-1. `.env` 虽改了，但 `OnlineInferenceJob` 没重启。
-2. 重启的是旧窗口，实际跑的不是当前代码/当前配置。
-3. 发消息的 topic 不是当前 `ZEPHYR_INPUT_TOPIC`。
-4. 你用的是 `--from-beginning`，把历史消息当成了新消息。
+- 10 秒后命令超时退出
+- 不应出现 `A_ACCEPT_INVALID_20260518_NOT_JSON_AFTER_DISABLE`
+
+### 7.5 这一项什么情况算通过
+
+同时满足下面两条就算通过：
+
+1. 开启开关后，非法消息能进入 `invalid_sensor_topic`
+2. 关闭开关后，新发的非法消息不再进入 `invalid_sensor_topic`
+
+### 7.6 如果没通过，优先检查什么
+
+按这个顺序排查：
+
+1. 日志里是否真的显示 `enableInvalidSensorSink=true` 或 `false`
+2. 发送消息的 topic 是否正确
+3. `invalid_sensor_topic` 是否存在
+4. Kafka 地址 `192.168.88.161:9092` 是否可达
+5. 关闭开关后的验证是否误用了 `--from-beginning`
 
 ---
 
-## 7. 用例 A-3：验收 ONNX 后端切换与在线推理
+## 8. 用例 A-3：验证 ONNX 后端可以切换并正常推理
 
-## 7.1 生成 ONNX 模型（若已有可跳过）
+这一项要证明：系统不仅能切到 ONNX，而且切过去后还能真跑出结果。
 
-在项目根目录 PowerShell 执行：
+### 8.1 如果 ONNX 模型还没生成，先生成
+
+在 PowerShell 执行：
 
 ```powershell
 cd .\zephyr-ml
@@ -399,44 +444,41 @@ python .\train\export_onnx.py --model-path .\models\best_risk_model.pkl --featur
 cd ..
 ```
 
-若 `best_risk_model.pkl` 缺失，可先运行：
+如果 `best_risk_model.pkl` 不存在，可以先执行：
 
 ```powershell
 python .\zephyr-ml\tools\bootstrap_model.py
 ```
 
-## 7.2 配置
+### 8.2 执行前先确认一件事
 
-`.env` 设置：
+请确认 `.env` 中的 `ZEPHYR_ONNX_JAVA_HOME` 已经是正确的 JDK21 路径。
 
-```env
-ZEPHYR_RISK_INFERENCE_BACKEND=onnx
-ZEPHYR_ONNX_MODEL_PATH=D:\dashuju\homework\zephyr-watch\zephyr-ml\models\best_risk_model.onnx
-ZEPHYR_ONNX_INPUT_NAME=input
-ZEPHYR_ONNX_OUTPUT_NAME=
-ZEPHYR_ONNX_JAVA_HOME=C:\Program Files\Java\jdk-21
-ZEPHYR_FORCE_SYNC_REST_INFERENCE=false
+这是 ONNX 场景最容易出错的地方之一。
+
+### 8.3 执行命令
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify-task-a.ps1 -Scenario onnx -ShowWindow
 ```
 
-> `ZEPHYR_ONNX_JAVA_HOME` 请改成你本机真实 JDK21 路径。
+### 8.4 你要看什么
 
-重启全链路。
-
-## 7.3 观察日志
-
-OnlineInferenceJob / OnlineInference 相关日志应出现：
+看最新日志，应该出现：
 
 - `riskInferenceBackend=onnx`
 - `ZEPHYR_ONNX_BACKEND_ACTIVE modelPath=...`
 - `MultiBackendRiskPredictFunction ONNX initialized: input=...`
 
-如果出现：
+如果出现下面这句，就说明这次其实没有真正跑 ONNX，而是偷偷回退到 REST 了：
 
 - `ONNX unavailable, bridging to REST`
 
-说明 ONNX 没成功，实际走了 REST 桥接，此用例判不通过。
+只要看到这句，本用例就应该判定为不通过。
 
-## 7.4 MySQL 验证是否真的 ONNX 出数
+### 8.5 再确认 ONNX 确实产出了结果
+
+执行：
 
 ```sql
 SELECT model_version, COUNT(*) AS cnt
@@ -446,19 +488,23 @@ GROUP BY model_version
 ORDER BY cnt DESC;
 ```
 
-预期：出现 `...-onnx` 后缀的 `model_version`。
+预期：能看到带 `onnx` 标记的 `model_version`。
 
-## 7.5 通过标准
+### 8.6 这一项什么情况算通过
+
+同时满足下面三条就算通过：
 
 1. 日志显示 ONNX 初始化成功
-2. DB 中有 `-onnx` 的推理记录
-3. 无持续 ONNX 初始化失败/桥接 REST 日志
+2. 没有出现 `ONNX unavailable, bridging to REST`
+3. MySQL 里有 ONNX 对应的推理结果
 
 ---
 
-## 8. 用例 A-4：验收 TF Serving 后端切换与在线推理
+## 9. 用例 A-4：验证 TF Serving 后端可以切换并正常推理
 
-## 8.1 生成 TF Serving SavedModel
+这一项要证明：系统能调用本机 Docker 启动的 TF Serving。
+
+### 9.1 如果 TF Serving 模型还没生成，先生成
 
 ```powershell
 cd .\zephyr-ml
@@ -467,52 +513,43 @@ python .\train\export_tf_serving_saved_model.py --model-path .\models\best_risk_
 cd ..
 ```
 
-生成目录应存在：
+生成后应存在目录：
 
 - `zephyr-ml\models\tf_serving\risk_classifier\1\`
 
-## 8.2 是否需要上传模型？
+### 9.2 启动 TF Serving
 
-本验收文档按“**仅本机 Docker 部署 TF Serving**”执行：  
-不需要上传模型到 node2，直接挂载本机导出的模型目录即可。
-
-## 8.3 启动 TF Serving（本机 Docker）
-
-PowerShell 执行（路径按实际调整）：
+在 PowerShell 执行：
 
 ```powershell
 docker run --rm -p 8501:8501 --name zephyr-tfs -v D:/dashuju/homework/zephyr-watch/zephyr-ml/models/tf_serving/risk_classifier:/models/risk_classifier -e MODEL_NAME=risk_classifier tensorflow/serving
 ```
 
-另开一个终端检查：
+这个窗口先不要关。
+
+再开一个新终端，执行：
 
 ```powershell
 curl.exe -s http://localhost:8501/v1/models/risk_classifier
 ```
 
-预期返回模型状态信息（如 `AVAILABLE`）。
+如果返回里能看到类似 `AVAILABLE` 的状态信息，说明 TF Serving 已经正常启动。
 
-## 8.4 配置（本机 Docker）
+### 9.3 执行命令
 
-`.env` 设置：
-
-```env
-ZEPHYR_RISK_INFERENCE_BACKEND=tf-serving
-ZEPHYR_TF_SERVING_URL=http://localhost:8501/v1/models/risk_classifier:predict
-ZEPHYR_TF_SERVING_INPUT_NAME=inputs
-ZEPHYR_TF_SERVING_SIGNATURE_NAME=serving_default
-ZEPHYR_FORCE_SYNC_REST_INFERENCE=false
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify-task-a.ps1 -Scenario tf-serving -ShowWindow
 ```
 
-重启全链路。
+### 9.4 你要看什么
 
-## 8.5 日志与出数验证
-
-日志应至少看到：
+最新日志里至少应该看到：
 
 - `riskInferenceBackend=tf-serving`
 
-MySQL 验证：
+### 9.5 再确认 TF Serving 真的参与了推理
+
+执行：
 
 ```sql
 SELECT model_version, COUNT(*) AS cnt
@@ -522,50 +559,66 @@ GROUP BY model_version
 ORDER BY cnt DESC;
 ```
 
-预期：出现 `...-tf-serving` 的 `model_version`。
+预期：能看到带 `tf-serving` 标记的 `model_version`。
 
-## 8.6 通过标准
+### 9.6 这一项什么情况算通过
 
-1. TF Serving 可联通并参与推理
-2. DB 有 `-tf-serving` 推理结果
-3. 无持续 `TF Serving URL is empty` 或响应解析失败错误
+同时满足下面三条就算通过：
+
+1. TF Serving 服务本身可访问
+2. 日志显示后端已经切到 `tf-serving`
+3. MySQL 里有 TF Serving 对应的推理结果
 
 ---
 
-## 9. 回归验收：确认不影响其他成员功能
+## 10. 回归验收：确认 A 成员改动没有影响其他人
 
-这是“能否合并”的关键步骤，必须做。
+这是最后一步，也是非常关键的一步。
 
-## 9.1 恢复团队默认配置（推荐）
+它要回答的问题是：
 
-`.env` 改回：
+- A 这部分虽然能跑，但有没有把整个项目主流程带坏？
 
-```env
-ZEPHYR_RISK_INFERENCE_BACKEND=rest
-ZEPHYR_FORCE_SYNC_REST_INFERENCE=false
-ZEPHYR_ENABLE_INVALID_SENSOR_SINK=false
+### 10.1 先恢复默认模式
+
+执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify-task-a.ps1 -Scenario default -ShowWindow
 ```
 
-重启全链路。
+这一步的含义是：
 
-## 9.2 检查 5 个主进程都启动
+- 把 A 相关场景切回默认模式
+- 让项目回到团队平时演示时的常规状态
+
+### 10.2 检查主进程是否都还在
+
+执行：
 
 ```powershell
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'OnlineInferenceJob|RecommendJob|AlertReviewJob|SensorDataProducer|spring-boot-maven-plugin' } | Select-Object ProcessId, Name, CommandLine
 ```
 
-预期：能看到对应进程。
+预期：能看到这些主要进程对应的信息。
 
-## 9.3 检查 API 与 Dashboard
+### 10.3 检查 API 和 Dashboard 是否还能访问
+
+执行：
 
 ```powershell
 curl.exe -s http://localhost:8080/actuator/health
 curl.exe -s http://localhost:8080/api/dashboard/overview
 ```
 
-预期：健康正常，overview 返回统计数据。
+预期：
 
-## 9.4 检查核心业务表持续更新
+1. health 接口仍然返回 `"status":"UP"`
+2. dashboard 接口仍然能返回 JSON 数据
+
+### 10.4 检查核心业务表是否仍有新数据
+
+执行：
 
 ```sql
 SELECT COUNT(*) AS pred_5m
@@ -581,63 +634,123 @@ FROM online_feature_snapshot
 WHERE created_at >= NOW() - INTERVAL 5 MINUTE;
 ```
 
-预期：`pred_5m > 0`、`feature_5m > 0`；`alert_10m` 允许为 0（取决于风险触发情况）。
+预期：
 
-## 9.5 回归通过标准
+- `pred_5m > 0`
+- `feature_5m > 0`
+- `alert_10m` 允许为 0，因为它和风险触发情况有关
 
-1. 默认配置下所有既有流程可启动可运行
-2. 业务主表持续写入
-3. 无因 A 改造导致的启动失败/链路中断
+### 10.5 这一项什么情况算通过
+
+同时满足下面三条就算通过：
+
+1. 默认模式下主要进程仍在运行
+2. API 和 dashboard 仍能正常访问
+3. 核心业务表仍然持续写入数据
 
 ---
 
-## 10. 验收记录模板（建议按此提交给组长）
+## 11. 推荐的正式验收顺序
 
-请把每个用例记录成以下格式：
+如果你是组长或老师，建议就按这个顺序做，不容易乱：
+
+1. 先执行第 4 节，启动全链路基线。
+2. 执行 A-1，验证默认 Async REST。
+3. 执行 A-1R，验证同步 REST 回退。
+4. 执行 A-2，验证无效消息旁路与关闭开关后的反向结果。
+5. 执行 A-3，验证 ONNX。
+6. 执行 A-4，验证 TF Serving。
+7. 执行第 10 节，做回归验收。
+
+---
+
+## 12. 验收记录怎么写
+
+建议每个用例都按下面格式记录：
 
 ```text
 用例编号：A-1
 执行时间：2026-05-18 14:30
 执行人：XXX
-配置快照：.env 中关键变量截图
-关键日志：riskInferenceBackend=rest, useAsyncRestMainline=true
-SQL结果：device_risk_prediction 5分钟新增 128 条
+执行命令：powershell -ExecutionPolicy Bypass -File .\verify-task-a.ps1 -Scenario rest-async
+看到的关键日志：riskInferenceBackend=rest, useAsyncRestMainline=true
+MySQL / Kafka 结果：device_risk_prediction 5分钟新增 128 条
 结论：通过
 ```
 
-建议至少提供以下证据截图：
+建议保留这些截图或证据：
 
-1. `.env` 关键配置（按当前用例）
-2. OnlineInferenceJob 关键日志
-3. API 健康检查返回
+1. `verify-task-a.ps1` 的执行命令与输出
+2. `logs\task-a\` 里对应场景的日志
+3. API 健康检查结果
 4. MySQL 查询结果
-5. `invalid_sensor_topic` 消费结果（A-2）
-6. ONNX / TF Serving 模型版本查询结果（A-3/A-4）
+5. `invalid_sensor_topic` 的消费结果
+6. ONNX / TF Serving 场景下的模型版本查询结果
 
 ---
 
-## 11. 常见失败与排查
+## 13. 常见失败与排查
 
-1. ONNX 模式日志出现 `ONNX unavailable, bridging to REST`  
-原因：ONNX 模型路径/JDK21/onnxruntime 依赖不匹配。  
-处理：核对 `ZEPHYR_ONNX_MODEL_PATH`、`ZEPHYR_ONNX_JAVA_HOME`，确认模型文件存在。
+### 13.1 ONNX 日志出现 `ONNX unavailable, bridging to REST`
 
-2. TF Serving 模式无结果  
-原因：容器未启动或 URL 配错。  
-处理：先 `curl http://localhost:8501/v1/models/risk_classifier`，确认模型 `AVAILABLE`。
+这表示：
 
-3. `invalid_sensor_topic` 无消息  
-原因：未开 `ZEPHYR_ENABLE_INVALID_SENSOR_SINK` 或发送的并非无效消息。  
-处理：确认开关为 `true`，发送明显非法字符串（非 JSON）。
+- 这次并没有真正跑 ONNX
+- 系统退回到了 REST
 
-4. 没有推理数据写入 MySQL  
-原因：Kafka 输入无数据、MySQL 连接错误、任务未启动。  
-处理：检查 `SensorDataProducer` 窗口是否持续发送，检查 API 与 OnlineInferenceJob 窗口报错。
+优先检查：
+
+1. `ZEPHYR_ONNX_JAVA_HOME` 是否正确
+2. ONNX 模型文件是否存在
+3. 是否确实执行的是 `-Scenario onnx`
+
+### 13.2 TF Serving 没有结果
+
+优先检查：
+
+1. Docker 容器是否真的启动了
+2. `curl http://localhost:8501/v1/models/risk_classifier` 是否能看到 `AVAILABLE`
+3. 是否执行的是 `-Scenario tf-serving`
+
+### 13.3 `invalid_sensor_topic` 没有看到消息
+
+优先检查：
+
+1. 是否执行了 `-Scenario invalid-on`
+2. 日志里是否真的有 `enableInvalidSensorSink=true`
+3. 发出去的是否是明显非法的非 JSON 字符串
+4. topic 名称是否正确
+
+### 13.4 MySQL 一直没有新数据
+
+优先检查：
+
+1. `SensorDataProducer` 是否还在运行
+2. API 是否健康
+3. `OnlineInferenceJob` 最新日志里是否报错
+4. MySQL 连接是否正常
+
+### 13.5 切换场景后看起来没有生效
+
+优先检查：
+
+1. 是否真的执行了 `verify-task-a.ps1`
+2. 是否看的就是 `logs\task-a\` 下最新时间戳的日志
+3. 是否有旧窗口残留导致误判
 
 ---
 
-## 12. 最终验收结论规则
+## 14. 最终结论怎么判定
 
-仅当 A-1、A-1R、A-2、A-3、A-4、回归验收全部通过，才可认定：
+只有当下面这些全部通过时，才能认定 A 成员任务已完成并可验收：
 
-**A 成员任务“在线推理增强”完成且交付可验收。**
+1. A-1 通过
+2. A-1R 通过
+3. A-2 通过
+4. A-3 通过
+5. A-4 通过
+6. 回归验收通过
+
+最终结论可写为：
+
+**A 成员任务“在线推理增强”完成，交付可验收。**
